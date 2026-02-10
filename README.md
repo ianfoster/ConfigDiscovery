@@ -30,7 +30,7 @@ Tested configurations for **ALCF Polaris**:
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/ConfigDiscovery.git
+git clone https://github.com/ianfoster/ConfigDiscovery.git
 cd ConfigDiscovery
 pip install -e .
 ```
@@ -40,6 +40,77 @@ pip install -e .
 - Python 3.10+
 - `ANTHROPIC_API_KEY` environment variable (for discovery)
 - Globus Compute endpoint access
+
+### Setting Up a Globus Compute Endpoint
+
+To run configurations on an HPC system, you need a Globus Compute endpoint running there.
+
+#### 1. Install Globus Compute on the HPC system
+
+SSH into the HPC system and install the endpoint software:
+
+```bash
+# On the HPC system (e.g., Polaris login node)
+pip install --user globus-compute-endpoint
+```
+
+#### 2. Configure the endpoint
+
+```bash
+# Create a new endpoint configuration
+globus-compute-endpoint configure my-endpoint
+
+# This creates ~/.globus_compute/my-endpoint/config.yaml
+# Edit if needed (e.g., to specify a conda environment or scheduler settings)
+```
+
+#### 3. Start the endpoint
+
+```bash
+# Start the endpoint
+globus-compute-endpoint start my-endpoint
+
+# The endpoint ID will be displayed, e.g.:
+# Endpoint ID: 0554c761-5a62-474d-b26e-df7455682bba
+```
+
+#### 4. Check endpoint status
+
+```bash
+# Check if the endpoint is running
+globus-compute-endpoint list
+
+# Expected output:
+# +-------------+--------+--------------------------------------+
+# | Endpoint    | Status | Endpoint ID                          |
+# +-------------+--------+--------------------------------------+
+# | my-endpoint | Running| 0554c761-5a62-474d-b26e-df7455682bba |
+# +-------------+--------+--------------------------------------+
+
+# For more details
+globus-compute-endpoint status my-endpoint
+```
+
+#### 5. Stop the endpoint (when done)
+
+```bash
+globus-compute-endpoint stop my-endpoint
+```
+
+#### Troubleshooting
+
+```bash
+# View endpoint logs
+globus-compute-endpoint logs my-endpoint
+
+# Restart if having issues
+globus-compute-endpoint restart my-endpoint
+
+# Check if endpoint is reachable from your local machine
+python -c "from globus_compute_sdk import Client; c = Client(); print(c.get_endpoint_status('YOUR-ENDPOINT-ID'))"
+```
+
+For more details, see the [Globus Compute documentation](https://globus-compute.readthedocs.io/).
 
 ### Using Existing Configs
 
@@ -73,7 +144,7 @@ For contributors testing configs:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/yourusername/ConfigDiscovery.git
+git clone https://github.com/ianfoster/ConfigDiscovery.git
 cd ConfigDiscovery
 pip install -e .
 
