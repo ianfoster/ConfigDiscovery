@@ -41,6 +41,18 @@ pip install -e .
 - `ANTHROPIC_API_KEY` environment variable (for discovery)
 - Globus Compute endpoint access
 
+### Environment Variables
+
+```bash
+# Required: Set your Globus Compute endpoint ID
+export GLOBUS_COMPUTE_ENDPOINT=your-endpoint-uuid-here
+
+# Optional: For discovering new configurations
+export ANTHROPIC_API_KEY=your-api-key
+```
+
+The `GLOBUS_COMPUTE_ENDPOINT` variable allows you to use configs without hardcoding the endpoint ID. Configs can omit `endpoint_id` and it will be read from this variable.
+
 ### Setting Up a Globus Compute Endpoint
 
 To run configurations on an HPC system, you need a Globus Compute endpoint running there.
@@ -148,14 +160,35 @@ git clone https://github.com/ianfoster/ConfigDiscovery.git
 cd ConfigDiscovery
 pip install -e .
 
-# 2. List available configs
-configdiscovery list
+# 2. Set your endpoint ID
+export GLOBUS_COMPUTE_ENDPOINT=your-endpoint-uuid
 
-# 3. Test a specific config
+# 3. Check endpoint status
+python scripts/test_configs.py --status
+
+# 4. Test a specific config
 configdiscovery test configs/polaris/psi4.yaml
 
-# 4. Run with different parameters
+# 5. Run with different parameters
 configdiscovery run configs/polaris/psi4.yaml -k method=mp2 -k basis=cc-pvdz
+```
+
+### Batch Testing
+
+Use the test script to test multiple configurations:
+
+```bash
+# Test all configs
+python scripts/test_configs.py
+
+# Test specific configs
+python scripts/test_configs.py configs/polaris/psi4.yaml configs/polaris/ase.yaml
+
+# Skip installation verification (faster)
+python scripts/test_configs.py --skip-install
+
+# Check endpoint status only
+python scripts/test_configs.py --status
 ```
 
 ### Expected Test Output

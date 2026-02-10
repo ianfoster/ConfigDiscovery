@@ -1,10 +1,20 @@
 """Pydantic models for HPC configuration schema."""
 
+import os
 from datetime import date
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# Environment variable for default endpoint ID
+ENDPOINT_ENV_VAR = "GLOBUS_COMPUTE_ENDPOINT"
+
+
+def get_endpoint_from_env() -> str | None:
+    """Get endpoint ID from environment variable."""
+    return os.environ.get(ENDPOINT_ENV_VAR)
 
 
 class Environment(BaseModel):
@@ -95,7 +105,23 @@ class HPCConfig(BaseModel):
     version: str | None = Field(default=None, description="Software version")
     description: str | None = Field(default=None, description="What this config does")
     hpc_system: str = Field(..., description="HPC system name (e.g., polaris, frontier)")
-    endpoint_id: str = Field(..., description="Globus Compute endpoint UUID")
+    endpoint_id: str | None = Field(
+        default=None,
+        description=f"Globus Compute endpoint UUID (or set {ENDPOINT_ENV_VAR} env var)"
+    )
+
+    @model_validator(mode="after")
+    def resolve_endpoint_id(self) -> "HPCConfig":
+        """Resolve endpoint_id from environment variable if not set."""
+        if not self.endpoint_id:
+            env_endpoint = os.environ.get(ENDPOINT_ENV_VAR)
+            if env_endpoint:
+                self.endpoint_id = env_endpoint
+            else:
+                raise ValueError(
+                    f"endpoint_id must be provided in config or via {ENDPOINT_ENV_VAR} environment variable"
+                )
+        return self
 
     environment: Environment = Field(default_factory=Environment)
     installation: Installation = Field(default_factory=Installation)
