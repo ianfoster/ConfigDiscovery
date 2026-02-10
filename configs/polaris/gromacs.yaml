@@ -1,0 +1,149 @@
+name: gromacs
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_env: gromacs_env
+  conda_packages:
+  - gromacs=2024.5
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+  - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+  - conda activate gromacs_env
+installation:
+  steps: []
+  verification: gmx --version
+execution:
+  function: |
+    def run_gromacs_water_simulation(box_size=3.0, nsteps=1000, output_dir="~/gromacs_run", use_mpi=False):
+        """Run a simple water box MD simulation using GROMACS."""
+        import subprocess
+        import os
+
+        output_dir = os.path.expanduser(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        gmx_cmd = "/eagle/AuroraGPT/foster/conda/envs/gromacs_env/bin.SSE2/gmx"
+        conda_activate = "source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && conda activate gromacs_env && "
+
+        # Create water box
+        cmd = f"{conda_activate} cd {output_dir} && {gmx_cmd} solvate -cs spc216.gro -o water_box.gro -box {box_size} {box_size} {box_size}"
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True)
+        if result.returncode != 0:
+            return {"status": "failed", "step": "solvate", "error": result.stderr}
+
+        # Count waters from gro file
+        gro_path = os.path.join(output_dir, "water_box.gro")
+        with open(gro_path, 'r') as f:
+            lines = f.readlines()
+            num_atoms = int(lines[1].strip())
+            num_waters = num_atoms // 3
+
+        # Create topology file
+        topol_content = f'''#include "oplsaa.ff/forcefield.itp"
+    #include "oplsaa.ff/spce.itp"
+
+    [ System ]
+    Water box
+
+    [ Molecules ]
+    SOL  {num_waters}
+    '''
+        topol_path = os.path.join(output_dir, "topol.top")
+        with open(topol_path, 'w') as f:
+            f.write(topol_content)
+
+        # Create MDP file
+        mdp_content = f'''integrator = md
+    nsteps = {nsteps}
+    dt = 0.002
+    nstenergy = 100
+    nstlog = 100
+    nstxout = 100
+    coulombtype = Cut-off
+    rcoulomb = 1.0
+    vdwtype = Cut-off
+    rvdw = 1.0
+    constraints = none
+    tc-grps = System
+    tau_t = 0.1
+    ref_t = 300
+    pcoupl = no
+    pbc = xyz
+    '''
+        mdp_path = os.path.join(output_dir, "md.mdp")
+        with open(mdp_path, 'w') as f:
+            f.write(mdp_content)
+
+        # Create energy minimization MDP
+        em_mdp = '''integrator = steep
+    nsteps = 500
+    emtol = 100
+    emstep = 0.01
+    '''
+        em_mdp_path = os.path.join(output_dir, "em.mdp")
+        with open(em_mdp_path, 'w') as f:
+            f.write(em_mdp)
+
+        # Run energy minimization
+        cmd = f"{conda_activate} cd {output_dir} && {gmx_cmd} grompp -f em.mdp -c water_box.gro -p topol.top -o em.tpr -maxwarn 10"
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True)
+
+        em_tpr_path = os.path.join(output_dir, "em.tpr")
+        if not os.path.exists(em_tpr_path):
+            return {"status": "failed", "step": "grompp_em", "error": result.stderr}
+
+        cmd = f"{conda_activate} cd {output_dir} && {gmx_cmd} mdrun -s em.tpr -c em_out.gro -e em.edr -g em.log -nt 1 -ntmpi 1"
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True)
+
+        em_out_path = os.path.join(output_dir, "em_out.gro")
+        if not os.path.exists(em_out_path):
+            return {"status": "failed", "step": "em_mdrun", "error": result.stderr}
+
+        # Run grompp for MD using minimized structure
+        cmd = f"{conda_activate} cd {output_dir} && {gmx_cmd} grompp -f md.mdp -c em_out.gro -p topol.top -o water_md.tpr -maxwarn 10"
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True)
+
+        tpr_path = os.path.join(output_dir, "water_md.tpr")
+        if not os.path.exists(tpr_path):
+            return {"status": "failed", "step": "grompp_md", "error": result.stderr, "stdout": result.stdout}
+
+        # Run mdrun
+        cmd = f"{conda_activate} cd {output_dir} && {gmx_cmd} mdrun -s water_md.tpr -o water_md.trr -c water_final.gro -e ener.edr -g md.log -nt 1 -ntmpi 1"
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash', capture_output=True, text=True)
+
+        # Check output files
+        output_files = []
+        for fname in ['water_box.gro', 'water_final.gro', 'water_md.trr', 'ener.edr', 'md.log', 'topol.top']:
+            fpath = os.path.join(output_dir, fname)
+            if os.path.exists(fpath):
+                output_files.append(fpath)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "returncode": result.returncode,
+            "stdout": result.stdout[-2000:] if result.stdout else "",
+            "stderr": result.stderr[-1000:] if result.stderr else "",
+            "output_dir": output_dir,
+            "output_files": output_files,
+            "num_waters": num_waters,
+            "nsteps": nsteps
+        }
+  function_name: run_gromacs_water_simulation
+  resources:
+    nodes: 1
+    cores_per_node: 32
+    memory_gb: 32
+    walltime: 01:00:00
+    queue: workq
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-09'
+  docs_consulted:
+  - https://manual.gromacs.org/current/install-guide/index.html
+  attempts: 30
+  notes: 'GROMACS 2024.5 installed via conda. Both gmx (thread_mpi) and gmx_mpi available.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

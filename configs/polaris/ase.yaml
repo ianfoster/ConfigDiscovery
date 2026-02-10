@@ -1,0 +1,289 @@
+name: ase
+version: "3.27.0"
+description: |
+  The Atomic Simulation Environment (ASE) is a Python library for setting up,
+  manipulating, running, visualizing, and analyzing atomistic simulations. ASE
+  serves as a universal interface to many different simulation codes and provides
+  a consistent Python API for working with atoms, molecules, and crystals.
+
+  Key capabilities:
+  - Structure building (molecules, bulk crystals, surfaces, nanoparticles)
+  - Geometry optimization (BFGS, LBFGS, FIRE)
+  - Molecular dynamics (Verlet, Langevin, NPT)
+  - Interface to 40+ external calculators (VASP, QE, GPAW, etc.)
+  - Built-in EMT calculator for quick testing
+  - Trajectory file I/O and analysis
+
+  ASE is particularly useful as a "glue" layer to prepare inputs, post-process
+  outputs, and automate workflows across different simulation codes.
+
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
+environment:
+  modules: []
+  conda_env: null  # Uses system Python
+  conda_packages: []
+  pip_packages:
+    - ase
+  env_vars: {}
+  setup_commands: []
+
+installation:
+  prerequisites:
+    - "Python 3.8+ (available on Polaris)"
+    - "NumPy, SciPy (installed as ASE dependencies)"
+  steps:
+    - "# ASE can be installed directly with pip"
+    - python3 -m pip install --user ase
+    - "# Optional: Install visualization support"
+    - python3 -m pip install --user matplotlib
+  verification: |
+    python3 -c "import ase; print(f'ASE version: {ase.__version__}'); \
+    from ase.calculators.emt import EMT; print('EMT calculator available')"
+  notes: |
+    ASE uses the system Python on Polaris (no conda environment needed).
+    The --user flag installs to ~/.local/ which is in the default PATH.
+
+    ASE includes the EMT (Effective Medium Theory) calculator which is
+    useful for quick tests with metallic systems (Cu, Ag, Au, Ni, Pd, Pt, Al).
+
+    For production DFT calculations, ASE interfaces with external codes:
+    - VASP: from ase.calculators.vasp import Vasp
+    - Quantum ESPRESSO: from ase.calculators.espresso import Espresso
+    - GPAW: from ase.calculators.gpaw import GPAW
+    - NWChem: from ase.calculators.nwchem import NWChem
+
+execution:
+  function: |
+    def run_ase_calculation(structure_type="molecule", molecule_name="H2O",
+                            crystal_name="Cu", lattice="fcc", lattice_constant=3.6,
+                            supercell=(2, 2, 2), calculator="EMT",
+                            optimize=True, run_md=False, md_steps=100, temperature=300,
+                            max_force=0.05, max_opt_steps=200, output_dir=None):
+        """
+        Run ASE calculations for molecular or bulk structures.
+
+        Parameters:
+        -----------
+        structure_type : str
+            Type of structure: 'molecule' or 'bulk'
+        molecule_name : str
+            Molecule name if structure_type='molecule'. Built-in molecules include:
+            H2O, CH4, NH3, CO, CO2, H2, N2, O2, C6H6 (benzene), CH3OH, etc.
+        crystal_name : str
+            Element symbol if structure_type='bulk' (e.g., 'Cu', 'Al', 'Si')
+        lattice : str
+            Crystal structure: 'fcc', 'bcc', 'hcp', 'diamond', 'sc'
+        lattice_constant : float
+            Lattice constant in Angstroms
+        supercell : tuple
+            Supercell expansion (nx, ny, nz)
+        calculator : str
+            Calculator to use:
+            - 'EMT': Built-in Effective Medium Theory (fast, metals only)
+            - 'VASP', 'Espresso', 'NWChem': External codes (require setup)
+        optimize : bool
+            Whether to optimize the geometry (default: True)
+        run_md : bool
+            Whether to run molecular dynamics after optimization
+        md_steps : int
+            Number of MD steps if run_md=True
+        temperature : float
+            MD temperature in Kelvin
+        max_force : float
+            Force convergence criterion for optimization (eV/Angstrom)
+        max_opt_steps : int
+            Maximum optimization steps
+        output_dir : str
+            Output directory (created automatically if None)
+
+        Returns:
+        --------
+        dict : Results including energies, forces, trajectory files
+
+        Example:
+        --------
+        # Optimize a water molecule
+        result = run_ase_calculation(structure_type='molecule', molecule_name='H2O')
+
+        # Optimize a Cu bulk crystal
+        result = run_ase_calculation(structure_type='bulk', crystal_name='Cu',
+                                     lattice='fcc', lattice_constant=3.6)
+
+        # Run MD on aluminum
+        result = run_ase_calculation(structure_type='bulk', crystal_name='Al',
+                                     optimize=True, run_md=True, md_steps=500,
+                                     temperature=500)
+        """
+        import subprocess
+        import os
+        import tempfile
+        import numpy as np
+        from ase.build import molecule, bulk
+        from ase.calculators.emt import EMT
+        from ase.optimize import BFGS
+        from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+        from ase.md.verlet import VelocityVerlet
+        from ase.io import write, read
+        from ase import units
+
+        # Create output directory
+        if output_dir is None:
+            output_dir = tempfile.mkdtemp(prefix='ase_calc_')
+        else:
+            os.makedirs(output_dir, exist_ok=True)
+
+        print(f"ASE calculation starting in: {output_dir}")
+
+        try:
+            # Create structure
+            if structure_type == 'molecule':
+                atoms = molecule(molecule_name)
+                print(f'Created {molecule_name} molecule with {len(atoms)} atoms')
+            elif structure_type == 'bulk':
+                atoms = bulk(crystal_name, lattice, a=lattice_constant)
+                if supercell != (1, 1, 1):
+                    atoms *= supercell
+                print(f'Created {crystal_name} {lattice} bulk with {len(atoms)} atoms')
+                print(f'Cell parameters: {atoms.cell.cellpar()}')
+            else:
+                raise ValueError(f"structure_type must be 'molecule' or 'bulk'")
+
+            # Set up calculator
+            if calculator == 'EMT':
+                atoms.calc = EMT()
+                print("Using EMT calculator")
+            else:
+                raise ValueError(f"Calculator {calculator} not available in this config")
+
+            # Calculate initial energy and forces
+            print("Calculating initial energy...")
+            initial_energy = atoms.get_potential_energy()
+            initial_forces = atoms.get_forces()
+            initial_max_force = np.max(np.abs(initial_forces))
+
+            print(f'Initial energy: {initial_energy:.6f} eV')
+            print(f'Initial max force: {initial_max_force:.6f} eV/A')
+
+            # Save initial structure
+            write(os.path.join(output_dir, 'initial.xyz'), atoms)
+            write(os.path.join(output_dir, 'initial.traj'), atoms)
+
+            results = {
+                'output_dir': output_dir,
+                'initial_energy': float(initial_energy),
+                'initial_max_force': float(initial_max_force),
+                'n_atoms': len(atoms),
+                'structure_type': structure_type,
+                'calculator': calculator
+            }
+
+            # Structure optimization
+            if optimize:
+                print(f"Running structure optimization (max_force={max_force} eV/A)...")
+                log_file = os.path.join(output_dir, 'optimization.log')
+                opt = BFGS(atoms, logfile=log_file)
+                opt.run(fmax=max_force, steps=max_opt_steps)
+
+                final_energy = atoms.get_potential_energy()
+                final_forces = atoms.get_forces()
+                final_max_force = np.max(np.abs(final_forces))
+
+                print(f'Optimized energy: {final_energy:.6f} eV')
+                print(f'Energy change: {final_energy - initial_energy:.6f} eV')
+                print(f'Optimization converged in {opt.nsteps} steps')
+
+                write(os.path.join(output_dir, 'optimized.xyz'), atoms)
+                write(os.path.join(output_dir, 'optimized.traj'), atoms)
+
+                results.update({
+                    'optimized_energy': float(final_energy),
+                    'energy_change': float(final_energy - initial_energy),
+                    'final_max_force': float(final_max_force),
+                    'opt_steps': opt.nsteps,
+                    'optimization_converged': final_max_force < max_force
+                })
+
+            # Molecular dynamics
+            if run_md:
+                print(f"Running MD simulation ({md_steps} steps at {temperature} K)...")
+                MaxwellBoltzmannDistribution(atoms, temperature_K=temperature)
+                md = VelocityVerlet(atoms, 1.0 * units.fs)
+
+                md_energies = []
+                md_file = os.path.join(output_dir, 'md_trajectory.traj')
+
+                for i in range(md_steps):
+                    md.run(1)
+                    if i % 10 == 0:
+                        write(md_file, atoms, append=True)
+                        total_energy = atoms.get_total_energy()
+                        md_energies.append(total_energy)
+
+                avg_energy = np.mean(md_energies)
+                energy_std = np.std(md_energies)
+                print(f"MD completed. Average energy: {avg_energy:.6f} +/- {energy_std:.6f} eV")
+
+                results.update({
+                    'md_average_energy': float(avg_energy),
+                    'md_energy_std': float(energy_std),
+                    'md_steps_completed': md_steps,
+                    'md_temperature': temperature
+                })
+
+            # List output files
+            output_files = [f for f in os.listdir(output_dir)
+                          if f.endswith(('.xyz', '.traj', '.log', '.txt'))]
+            results['output_files'] = output_files
+
+            print(f"\nCalculation completed successfully!")
+            return results
+
+        except Exception as e:
+            return {
+                'output_dir': output_dir,
+                'error': str(e),
+                'success': False
+            }
+  function_name: run_ase_calculation
+  resources:
+    nodes: 1
+    cores_per_node: 1
+    memory_gb: 4
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug
+  pre_commands: []
+  post_commands: []
+
+discovery_log:
+  discovered_date: "2026-02-10"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  docs_consulted:
+    - https://wiki.fysik.dtu.dk/ase/
+  attempts: 16
+  notes: |
+    Successfully installed ASE 3.27.0 via pip using the system Python 3.12.
+    No conda environment needed - ASE works with the default Python.
+
+    Tested with water molecule optimization using the built-in EMT calculator.
+    Optimization converged in 3 steps with energy change of -0.74 eV.
+
+    ASE provides a consistent interface for:
+    - Structure building (molecules, crystals, surfaces)
+    - BFGS and other optimizers
+    - Molecular dynamics (Verlet, Langevin)
+    - I/O for many file formats (.xyz, .traj, VASP, QE, etc.)
+
+    Note: Unlike other codes, ASE doesn't require subprocess+conda workaround
+    because it uses the system Python which is available in Globus Compute workers.
+  claude_model: claude-sonnet-4-20250514
+
+tags:
+  - python-library
+  - atomistic-simulation
+  - structure-building
+  - optimization
+  - molecular-dynamics
+  - calculator-interface

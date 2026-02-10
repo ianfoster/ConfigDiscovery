@@ -1,0 +1,100 @@
+name: openfoam
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules:
+  - PrgEnv-gnu
+  conda_env: openfoam_env
+  conda_packages:
+  - openfoam
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+  - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+  - conda activate openfoam_env
+installation:
+  steps: []
+  verification: icoFoam -help
+execution:
+  function: "def run_openfoam_cavity(case_name=\"cavity_simulation\", mesh_resolution=20,\
+    \ end_time=0.5, write_interval=0.1, working_dir=\"~/openfoam_cases\"):\n    import\
+    \ subprocess\n    import os\n    import shutil\n    from pathlib import Path\n\
+    \    \n    # Set up working directory\n    working_dir = os.path.expanduser(working_dir)\n\
+    \    case_dir = os.path.join(working_dir, case_name)\n    \n    # Create working\
+    \ directory\n    os.makedirs(working_dir, exist_ok=True)\n    \n    # Copy tutorial\
+    \ cavity case from OpenFOAM installation\n    conda_env_path = os.environ.get('CONDA_PREFIX',\
+    \ '/eagle/AuroraGPT/foster/conda/envs/openfoam_env')\n    tutorial_path = os.path.join(conda_env_path,\
+    \ 'tutorials', 'incompressible', 'icoFoam', 'cavity', 'cavity')\n    \n    if\
+    \ os.path.exists(case_dir):\n        shutil.rmtree(case_dir)\n    shutil.copytree(tutorial_path,\
+    \ case_dir)\n    \n    # Change to case directory\n    original_dir = os.getcwd()\n\
+    \    os.chdir(case_dir)\n    \n    try:\n        # Modify blockMeshDict for custom\
+    \ resolution\n        if mesh_resolution != 20:\n            with open('system/blockMeshDict',\
+    \ 'r') as f:\n                content = f.read()\n            # Replace the default\
+    \ mesh resolution (20 20 1)\n            content = content.replace('20 20 1',\
+    \ f'{mesh_resolution} {mesh_resolution} 1')\n            with open('system/blockMeshDict',\
+    \ 'w') as f:\n                f.write(content)\n        \n        # Modify controlDict\
+    \ for custom simulation time\n        with open('system/controlDict', 'r') as\
+    \ f:\n            content = f.read()\n        \n        # Update endTime and writeInterval\n\
+    \        content = content.replace('endTime         0.5;', f'endTime         {end_time};')\n\
+    \        content = content.replace('writeInterval   0.1;', f'writeInterval   {write_interval};')\n\
+    \        \n        with open('system/controlDict', 'w') as f:\n            f.write(content)\n\
+    \        \n        # Run blockMesh to generate the mesh\n        print(\"Generating\
+    \ mesh...\")\n        mesh_result = subprocess.run(['blockMesh'], \n         \
+    \                          capture_output=True, text=True, \n                \
+    \                   shell=True, executable='/bin/bash')\n        \n        if\
+    \ mesh_result.returncode != 0:\n            return {\"status\": \"error\", \"\
+    step\": \"mesh_generation\", \"error\": mesh_result.stderr}\n        \n      \
+    \  print(\"Mesh generation completed successfully\")\n        \n        # Run\
+    \ icoFoam solver\n        print(\"Running OpenFOAM simulation...\")\n        solver_result\
+    \ = subprocess.run(['icoFoam'], \n                                     capture_output=True,\
+    \ text=True,\n                                     shell=True, executable='/bin/bash')\n\
+    \        \n        if solver_result.returncode != 0:\n            return {\"status\"\
+    : \"error\", \"step\": \"simulation\", \"error\": solver_result.stderr}\n    \
+    \    \n        print(\"Simulation completed successfully\")\n        \n      \
+    \  # Check for result directories\n        result_dirs = []\n        for item\
+    \ in os.listdir('.'):\n            try:\n                float(item)\n       \
+    \         if os.path.isdir(item):\n                    result_dirs.append(item)\n\
+    \            except ValueError:\n                continue\n        \n        result_dirs.sort(key=float)\n\
+    \        \n        # Create output summary\n        return {\n            \"status\"\
+    : \"completed\",\n            \"case_directory\": case_dir,\n            \"mesh_resolution\"\
+    : f\"{mesh_resolution}x{mesh_resolution}\",\n            \"end_time\": end_time,\n\
+    \            \"write_interval\": write_interval,\n            \"result_time_steps\"\
+    : result_dirs,\n            \"total_time_steps\": len(result_dirs),\n        \
+    \    \"mesh_log\": mesh_result.stdout,\n            \"solver_log\": solver_result.stdout[-1000:]\
+    \  # Last 1000 chars of solver output\n        }\n        \n    except Exception\
+    \ as e:\n        return {\"status\": \"error\", \"step\": \"execution\", \"error\"\
+    : str(e)}\n    \n    finally:\n        # Return to original directory\n      \
+    \  os.chdir(original_dir)"
+  function_name: run_openfoam_cavity
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    walltime: 00:30:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-09'
+  docs_consulted:
+  - https://openfoam.org/download/12-linux/
+  - https://openfoam.org/download/12-linux/
+  attempts: 28
+  notes: 'OpenFOAM v12 documentation indicates that for Linux distributions other
+    than Ubuntu, compiling from source is recommended. The Polaris system appears
+    to be running Linux and uses a module system with Lmod. There seems to be a technical
+    issue with command execution functions, but I need to find if OpenFOAM is available
+    as a module or if we need to compile from source.
+
+    OpenFOAM is available through conda-forge. Version 2412 is available, which appears
+    to be the ESI-OpenCFD version rather than the Foundation version. The Foundation
+    version v12 that the user requested may not be available via conda. Let me explore
+    installation options.
+
+    OpenFOAM version 2412 (ESI-OpenCFD) was successfully installed via conda-forge.
+    While this is the ESI version and not the Foundation version, it includes all
+    necessary solvers and utilities like icoFoam and blockMesh for running CFD simulations.
+    The conda installation provides a complete OpenFOAM environment with all necessary
+    tools.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

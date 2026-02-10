@@ -1,0 +1,265 @@
+name: quantum-espresso
+version: "7.5"
+description: |
+  Quantum ESPRESSO (QE) is an integrated suite of open-source codes for
+  electronic structure calculations and materials modeling at the nanoscale.
+  It uses plane-wave basis sets and pseudopotentials to solve the Kohn-Sham
+  equations within Density Functional Theory (DFT). QE is widely used for
+  calculating electronic, structural, and vibrational properties of materials
+  including metals, semiconductors, insulators, and molecules.
+
+  Key capabilities:
+  - Ground-state DFT (LDA, GGA, meta-GGA, hybrid functionals)
+  - Structural optimization and molecular dynamics
+  - Phonon calculations and electron-phonon coupling
+  - Time-dependent DFT for optical properties
+  - GW and BSE for accurate band gaps and excitons
+
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
+environment:
+  modules:
+    - gcc-native/14.2
+    - cray-mpich/9.0.1
+    - conda/2025-09-25
+  conda_env: qe-env
+  conda_packages:
+    - qe=7.5
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - source /soft/applications/conda/2025-09-25/mconda3/bin/activate
+    - conda activate qe-env
+
+installation:
+  prerequisites:
+    - Conda (miniconda or anaconda)
+    - "Pseudopotential files (downloaded automatically or from quantum-espresso.org)"
+    - "On Polaris: conda is available at /soft/applications/conda/"
+  steps:
+    - "# Initialize conda"
+    - source /soft/applications/conda/2025-09-25/mconda3/bin/activate
+    - "# Create environment"
+    - conda create -n qe-env python=3.11 -y
+    - conda activate qe-env
+    - "# Install Quantum ESPRESSO from conda-forge"
+    - conda install -c conda-forge qe=7.5 -y
+  verification: pw.x --version 2>&1 | head -3
+  notes: |
+    Quantum ESPRESSO requires pseudopotential files (.UPF format) for each
+    element in your calculation. Pseudopotentials can be downloaded from:
+    - https://pseudopotentials.quantum-espresso.org/
+    - https://www.materialscloud.org/discover/sssp
+
+    The execution function automatically downloads Si pseudopotentials for
+    the default test calculation. For other elements, you'll need to provide
+    appropriate pseudopotential files.
+
+    Common pseudopotential libraries:
+    - PZ (LDA): Older but reliable
+    - PBE (GGA): Most commonly used
+    - SSSP: Optimized for efficiency and accuracy
+    - PseudoDojo: High-quality norm-conserving and PAW
+
+execution:
+  function: |
+    def run_quantum_espresso(calculation_type="scf", ecutwfc=30.0):
+        """
+        Run Quantum ESPRESSO plane-wave DFT calculations.
+
+        Parameters:
+        -----------
+        calculation_type : str
+            Type of calculation:
+            - 'scf': Self-consistent field (single-point energy)
+            - 'relax': Atomic position relaxation
+            - 'vc-relax': Variable cell relaxation (optimize cell + atoms)
+            - 'bands': Band structure calculation (requires prior scf)
+            - 'nscf': Non-self-consistent calculation (for DOS, etc.)
+        ecutwfc : float
+            Kinetic energy cutoff for wavefunctions in Ry (Rydberg).
+            Higher values = more accurate but slower.
+            - 30-40 Ry: Reasonable for testing
+            - 60-80 Ry: Production quality for most systems
+            - 100+ Ry: High-precision calculations
+
+        Returns:
+        --------
+        dict : Results including total energy (Ry and eV), convergence status
+
+        Example:
+        --------
+        # Quick SCF test
+        result = run_quantum_espresso(calculation_type='scf', ecutwfc=30)
+
+        # Production calculation with higher cutoff
+        result = run_quantum_espresso(calculation_type='scf', ecutwfc=60)
+
+        # Structure relaxation
+        result = run_quantum_espresso(calculation_type='relax', ecutwfc=50)
+        """
+        import subprocess
+        import os
+        import tempfile
+        import textwrap
+
+        output_dir = tempfile.mkdtemp(prefix='qe_')
+
+        # Default test system: bulk silicon (diamond structure)
+        # ibrav=2 is FCC, celldm(1) is lattice parameter in Bohr
+        input_content = textwrap.dedent(f"""
+            &CONTROL
+              calculation = '{calculation_type}'
+              prefix = 'silicon'
+              outdir = './tmp/'
+              pseudo_dir = './'
+              tprnfor = .true.
+              tstress = .true.
+            /
+            &SYSTEM
+              ibrav = 2
+              celldm(1) = 10.2
+              nat = 2
+              ntyp = 1
+              ecutwfc = {ecutwfc}
+            /
+            &ELECTRONS
+              mixing_mode = 'plain'
+              mixing_beta = 0.7
+              conv_thr = 1.0d-8
+            /
+            ATOMIC_SPECIES
+              Si 28.086 Si.pz-vbc.UPF
+            ATOMIC_POSITIONS (alat)
+              Si 0.00 0.00 0.00
+              Si 0.25 0.25 0.25
+            K_POINTS automatic
+              4 4 4 1 1 1
+        """)
+
+        # Shell script with conda activation and pseudopotential download
+        run_script = textwrap.dedent(f"""
+            #!/bin/bash
+            source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+            conda activate qe-env
+
+            cd {output_dir}
+            mkdir -p tmp
+
+            # Download pseudopotential if not present
+            if [ ! -f Si.pz-vbc.UPF ]; then
+                echo "Downloading Si pseudopotential..."
+                curl -sL "https://pseudopotentials.quantum-espresso.org/upf_files/Si.pz-vbc.UPF" -o Si.pz-vbc.UPF || \\
+                wget -q "https://pseudopotentials.quantum-espresso.org/upf_files/Si.pz-vbc.UPF" -O Si.pz-vbc.UPF || \\
+                cp $CONDA_PREFIX/share/qe/pseudo/Si.pz-vbc.UPF . 2>/dev/null || \\
+                echo "ERROR: Could not get pseudopotential"
+            fi
+
+            # Run pw.x (main QE executable for plane-wave calculations)
+            echo "Running pw.x..."
+            pw.x -i silicon.in > silicon.out 2>&1
+
+            # Check completion
+            if grep -q "JOB DONE" silicon.out; then
+                echo "SUCCESS"
+            else
+                echo "FAILED"
+            fi
+        """)
+
+        # Write input files
+        input_path = os.path.join(output_dir, "silicon.in")
+        script_path = os.path.join(output_dir, "run_qe.sh")
+
+        with open(input_path, "w") as f:
+            f.write(input_content)
+
+        with open(script_path, "w") as f:
+            f.write(run_script)
+
+        os.chmod(script_path, 0o755)
+
+        result = subprocess.run(
+            ["bash", script_path],
+            capture_output=True,
+            text=True,
+            cwd=output_dir
+        )
+
+        # Parse results
+        output_file = os.path.join(output_dir, "silicon.out")
+        results = {
+            "calculation_type": calculation_type,
+            "ecutwfc": ecutwfc,
+            "output_dir": output_dir,
+            "input_file": input_path,
+            "output_file": output_file
+        }
+
+        if os.path.exists(output_file):
+            with open(output_file, "r") as f:
+                content = f.read()
+
+            if "JOB DONE" in content:
+                results["status"] = "completed"
+
+                # Extract total energy (line starts with "!")
+                for line in content.split("\n"):
+                    if line.strip().startswith("!"):
+                        try:
+                            energy = float(line.split("=")[1].split("Ry")[0].strip())
+                            results["total_energy_Ry"] = energy
+                            results["total_energy_eV"] = energy * 13.6057
+                        except:
+                            pass
+
+                if "convergence has been achieved" in content:
+                    results["converged"] = True
+            else:
+                results["status"] = "failed"
+                results["error"] = content[-2000:] if len(content) > 2000 else content
+        else:
+            results["status"] = "failed"
+            results["error"] = result.stderr or "No output file generated"
+            results["stdout"] = result.stdout
+
+        return results
+  function_name: run_quantum_espresso
+  resources:
+    nodes: 1
+    cores_per_node: 64
+    memory_gb: 256
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug-scaling
+  pre_commands: []
+  post_commands: []
+
+discovery_log:
+  discovered_date: "2026-02-10"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  docs_consulted:
+    - https://www.quantum-espresso.org/Doc/user_guide/
+  attempts: 39
+  notes: |
+    Successfully installed Quantum ESPRESSO v7.5 via conda-forge.
+
+    Tested with bulk silicon (2 atoms, FCC structure). SCF calculation
+    converged to -15.85219079 Ry (-215.68 eV).
+
+    Key finding: Pseudopotentials must be downloaded separately. The
+    execution function automatically fetches Si pseudopotentials from
+    the QE pseudopotential library.
+
+    Key finding: Execution functions must use subprocess with explicit conda
+    activation because Globus Compute workers don't inherit the conda environment.
+  claude_model: claude-sonnet-4-20250514
+
+tags:
+  - dft
+  - plane-wave
+  - materials-science
+  - solid-state
+  - electronic-structure
+  - phonons

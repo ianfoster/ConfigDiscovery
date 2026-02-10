@@ -1,0 +1,219 @@
+name: psi4
+version: "1.10"
+description: |
+  Psi4 is an open-source quantum chemistry package for high-accuracy
+  calculations of molecular properties and energies. It supports a wide
+  range of methods including Hartree-Fock (HF), Density Functional Theory
+  (DFT), Møller-Plesset perturbation theory (MP2), and Coupled Cluster
+  (CCSD, CCSD(T)). Psi4 is particularly known for its efficient
+  implementations and Python API for scriptable workflows.
+
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
+environment:
+  modules: []
+  conda_env: psi4_env
+  conda_packages:
+    - psi4
+    - python=3.11
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - conda activate psi4_env
+
+installation:
+  prerequisites:
+    - Conda (miniconda or anaconda)
+    - "On Polaris: conda is available at /soft/applications/conda/"
+  steps:
+    - "# Initialize conda in your shell"
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - "# Create a dedicated environment for Psi4"
+    - conda create -n psi4_env python=3.11 -y
+    - conda activate psi4_env
+    - "# Install Psi4 from conda-forge"
+    - conda install -c conda-forge psi4 -y
+  verification: python -c "import psi4; print('Psi4 version:', psi4.__version__)"
+  notes: |
+    Psi4 is available from conda-forge with versions up to 1.10. The conda
+    package includes all necessary dependencies (libint, libxc, etc.).
+
+    For GPU acceleration, you may need to install psi4-rt or build from source
+    with CUDA support - the conda-forge package is CPU-only.
+
+execution:
+  function: |
+    def run_psi4_calculation(method="hf", basis="sto-3g", calculation_type="energy"):
+        """
+        Run a Psi4 quantum chemistry calculation.
+
+        Parameters:
+        -----------
+        method : str
+            Quantum chemistry method. Options include:
+            - 'hf' : Hartree-Fock
+            - 'b3lyp' : B3LYP density functional
+            - 'mp2' : Second-order Møller-Plesset perturbation theory
+            - 'ccsd' : Coupled Cluster Singles and Doubles
+            - 'ccsd(t)' : CCSD with perturbative triples
+        basis : str
+            Basis set. Common options:
+            - 'sto-3g' : Minimal basis (fast, low accuracy)
+            - '6-31g*' : Split-valence with polarization
+            - 'cc-pvdz' : Correlation-consistent double-zeta
+            - 'cc-pvtz' : Correlation-consistent triple-zeta
+        calculation_type : str
+            Type of calculation: 'energy' or 'optimize'
+
+        Returns:
+        --------
+        dict : Results including energy (in hartree and eV), output files
+
+        Example:
+        --------
+        # Single-point energy
+        result = run_psi4_calculation(method='hf', basis='cc-pvdz')
+
+        # Geometry optimization with DFT
+        result = run_psi4_calculation(method='b3lyp', basis='6-31g*',
+                                      calculation_type='optimize')
+        """
+        import subprocess
+        import os
+        import tempfile
+        import json
+        import textwrap
+
+        output_dir = tempfile.mkdtemp(prefix='psi4_')
+
+        # We use subprocess to run Psi4 because Globus Compute functions
+        # execute in a minimal environment without conda activation.
+        # This script activates conda and runs the actual calculation.
+        script = textwrap.dedent(f"""
+            import psi4
+            import os
+            import json
+
+            print(f"Psi4 version: {{psi4.__version__}}")
+
+            psi4.core.set_memory_bytes(int(2e9))
+            psi4.core.set_num_threads(4)
+            psi4.core.set_output_file("{output_dir}/psi4_output.dat", False)
+
+            # Default test molecule: water
+            molecule = psi4.geometry('''
+            0 1
+            O  0.000000  0.000000  0.000000
+            H  0.757000  0.586000  0.000000
+            H -0.757000  0.586000  0.000000
+            ''')
+
+            print("Running {method}/{basis} {calculation_type} calculation...")
+
+            try:
+                if "{calculation_type}" == "energy":
+                    energy = psi4.energy("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "calculation_type": "energy",
+                        "method": "{method}",
+                        "basis": "{basis}",
+                        "energy_hartree": energy,
+                        "energy_eV": energy * 27.2114,
+                        "output_dir": "{output_dir}"
+                    }}
+                elif "{calculation_type}" == "optimize":
+                    energy = psi4.optimize("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "calculation_type": "optimize",
+                        "method": "{method}",
+                        "basis": "{basis}",
+                        "final_energy_hartree": energy,
+                        "output_dir": "{output_dir}"
+                    }}
+                else:
+                    energy = psi4.energy("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "energy_hartree": energy,
+                        "output_dir": "{output_dir}"
+                    }}
+
+                print(f"Calculation completed! Energy: {{energy:.8f}} hartree")
+
+            except Exception as e:
+                results = {{"status": "failed", "error": str(e), "output_dir": "{output_dir}"}}
+
+            finally:
+                psi4.core.close_outfile()
+
+            with open("{output_dir}/results.json", "w") as f:
+                json.dump(results, f)
+
+            print("Done!")
+        """)
+
+        script_path = os.path.join(output_dir, "run_psi4.py")
+        with open(script_path, "w") as f:
+            f.write(script)
+
+        # Activate conda environment and run the calculation
+        cmd = f"""
+        source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+        conda activate psi4_env
+        cd {output_dir}
+        python run_psi4.py
+        """
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True)
+
+        results_file = os.path.join(output_dir, "results.json")
+        if os.path.exists(results_file):
+            with open(results_file) as f:
+                results = json.load(f)
+            results["stdout"] = result.stdout
+            return results
+        else:
+            return {
+                "status": "failed",
+                "error": result.stderr or "No results file generated",
+                "stdout": result.stdout,
+                "returncode": result.returncode,
+                "output_dir": output_dir
+            }
+  function_name: run_psi4_calculation
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug
+  pre_commands: []
+  post_commands: []
+
+discovery_log:
+  discovered_date: "2026-02-10"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  docs_consulted:
+    - https://psicode.org/psi4manual/master/index.html
+  attempts: 22
+  notes: |
+    Successfully installed Psi4 v1.10 via conda-forge in a dedicated environment.
+    Tested both command-line and Python API usage. A simple Hartree-Fock
+    calculation on water molecule completed successfully with energy of
+    -74.96303340 hartree.
+
+    Key finding: Execution functions must use subprocess with explicit conda
+    activation because Globus Compute workers don't inherit the conda environment.
+  claude_model: claude-sonnet-4-20250514
+
+tags:
+  - quantum-chemistry
+  - electronic-structure
+  - dft
+  - coupled-cluster
+  - python-api

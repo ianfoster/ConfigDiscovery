@@ -1,0 +1,248 @@
+name: lammps
+version: "2024.08.29"
+description: |
+  LAMMPS (Large-scale Atomic/Molecular Massively Parallel Simulator) is a
+  classical molecular dynamics code with a focus on materials modeling.
+  It can be used to simulate atoms, molecules, polymers, biological systems,
+  and coarse-grained particles in various ensembles.
+
+  Key capabilities:
+  - Extensive library of interatomic potentials (Lennard-Jones, EAM, Tersoff,
+    ReaxFF, machine learning potentials)
+  - Parallel execution with MPI and GPU acceleration
+  - Many integrators and thermostats (NVE, NVT, NPT, Langevin)
+  - Analysis tools (RDF, MSD, stress/strain)
+  - PLUMED integration for enhanced sampling
+  - Python interface for scripted workflows
+
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
+environment:
+  modules: []
+  conda_env: lammps_test
+  conda_packages:
+    - lammps=2024.08.29
+    - python=3.11
+    - numpy
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - eval "$(/soft/applications/conda/2025-09-25/mconda3/condabin/conda shell.bash hook)"
+    - conda activate lammps_test
+
+installation:
+  prerequisites:
+    - Conda (miniconda or anaconda)
+    - "On Polaris: conda is available at /soft/applications/conda/"
+  steps:
+    - "# Initialize conda"
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - "# Create environment"
+    - conda create -n lammps_test python=3.11 -y
+    - conda activate lammps_test
+    - "# Install LAMMPS from conda-forge"
+    - conda install -c conda-forge lammps=2024.08.29 numpy -y
+  verification: lmp -help | head -10
+  notes: |
+    The conda-forge LAMMPS package provides:
+    - lmp: Main LAMMPS executable
+    - Python module: import lammps
+
+    The package includes many optional packages pre-compiled:
+    - MANYBODY: Many-body potentials (EAM, Tersoff, etc.)
+    - MOLECULE: Bond/angle/dihedral potentials
+    - KSPACE: Long-range electrostatics (PPPM, Ewald)
+    - RIGID: Rigid body dynamics
+    - ML-SNAP, ML-IAP: Machine learning potentials
+    - PLUMED: Enhanced sampling
+
+    For GPU acceleration, look for lammps-gpu packages or build from source.
+
+execution:
+  function: |
+    def run_lammps(input_script=None, input_file=None, output_dir="~/lammps_run",
+                   num_steps=1000, temperature=1.0, dump_freq=100):
+        """
+        Run LAMMPS molecular dynamics simulation.
+
+        Parameters:
+        -----------
+        input_script : str
+            LAMMPS input script content (overrides default)
+        input_file : str
+            Path to LAMMPS input file (overrides default)
+        output_dir : str
+            Output directory (default: ~/lammps_run)
+        num_steps : int
+            Number of MD steps (default: 1000)
+        temperature : float
+            Target temperature in LJ units (default: 1.0)
+            For real units, this would be Kelvin
+        dump_freq : int
+            Frequency for trajectory output (default: every 100 steps)
+
+        Returns:
+        --------
+        dict : Results including status, output files, performance stats
+
+        Example:
+        --------
+        # Run default LJ simulation
+        result = run_lammps(num_steps=1000, temperature=1.0)
+
+        # Run with custom input script
+        script = '''
+        units real
+        atom_style full
+        read_data system.data
+        ...
+        '''
+        result = run_lammps(input_script=script)
+
+        # Run from input file
+        result = run_lammps(input_file='/path/to/input.lammps')
+        """
+        import subprocess
+        import os
+        import tempfile
+        from pathlib import Path
+
+        # Expand output directory
+        output_dir = os.path.expanduser(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Default: Simple Lennard-Jones simulation
+        # This is useful for testing and benchmarking
+        default_script = f"""# Simple Lennard-Jones molecular dynamics simulation
+    # Units: LJ reduced units (energy=epsilon, length=sigma, mass=m)
+
+    units lj
+    dimension 3
+    boundary p p p
+
+    # Create simulation box with FCC lattice
+    # Density 0.8442 is near the LJ triple point
+    lattice fcc 0.8442
+    region box block 0 4 0 4 0 4
+    create_box 1 box
+    create_atoms 1 box
+
+    # Set atomic mass (LJ units)
+    mass 1 1.0
+
+    # Lennard-Jones potential with cutoff at 2.5 sigma
+    pair_style lj/cut 2.5
+    pair_coeff 1 1 1.0 1.0 2.5
+
+    # Neighbor list settings
+    neighbor 0.3 bin
+    neigh_modify every 1 delay 0 check yes
+
+    # NVT ensemble with Langevin thermostat
+    # Friction coefficient 1.0, random seed 12345
+    fix 1 all nve
+    fix 2 all langevin {temperature} {temperature} 1.0 12345
+
+    # Output settings
+    timestep 0.005
+    thermo {dump_freq}
+    thermo_style custom step temp pe ke etotal press
+
+    # Trajectory output
+    dump 1 all atom {dump_freq} trajectory.lammpstrj
+
+    # Run simulation
+    run {num_steps}
+
+    # Write final configuration
+    write_data final.data
+    """
+
+        # Use provided input or default
+        if input_script:
+            script_content = input_script
+        elif input_file and os.path.exists(input_file):
+            with open(input_file, 'r') as f:
+                script_content = f.read()
+        else:
+            script_content = default_script
+
+        # Write input script
+        input_path = os.path.join(output_dir, "input.in")
+        with open(input_path, 'w') as f:
+            f.write(script_content)
+
+        # Run LAMMPS with conda activation
+        cmd = f"""
+        source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+        conda activate lammps_test
+        cd {output_dir}
+        lmp -in input.in
+        """
+
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            executable='/bin/bash',
+            capture_output=True,
+            text=True
+        )
+
+        # Collect output files
+        output_files = []
+        for pattern in ['*.lammpstrj', '*.data', 'log.lammps']:
+            output_files.extend(Path(output_dir).glob(pattern))
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "returncode": result.returncode,
+            "stdout": result.stdout[-2000:] if result.stdout else "",
+            "stderr": result.stderr[-1000:] if result.stderr else "",
+            "output_dir": output_dir,
+            "output_files": [str(f) for f in output_files],
+            "num_steps": num_steps,
+            "temperature": temperature
+        }
+  function_name: run_lammps
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug
+  pre_commands: []
+  post_commands: []
+
+discovery_log:
+  discovered_date: "2026-02-09"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  docs_consulted:
+    - https://docs.lammps.org/Install.html
+    - https://docs.lammps.org/Manual.html
+  attempts: 31
+  notes: |
+    Successfully installed LAMMPS 2024.08.29 via conda-forge in a dedicated
+    environment. Executable is 'lmp' with OpenMPI support.
+
+    Tested with a 256-atom Lennard-Jones simulation (FCC lattice, density 0.8442).
+    Simulation completed 500 steps at ~8331 timesteps/second on CPU.
+
+    The conda package includes many packages:
+    - Potentials: MANYBODY (EAM, Tersoff), MEAM, REAXFF
+    - Methods: RIGID, MOLECULE, KSPACE
+    - ML potentials: ML-SNAP, ML-IAP
+    - Enhanced sampling: PLUMED integration
+
+    Key finding: Execution functions must use subprocess with explicit conda
+    activation because Globus Compute workers don't inherit the conda environment.
+  claude_model: claude-sonnet-4-20250514
+
+tags:
+  - molecular-dynamics
+  - materials-science
+  - classical-md
+  - lennard-jones
+  - mpi-parallel
+  - force-fields

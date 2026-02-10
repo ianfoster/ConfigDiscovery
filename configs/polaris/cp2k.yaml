@@ -1,0 +1,310 @@
+name: cp2k
+version: "2024.2"
+description: |
+  CP2K is a quantum chemistry and solid state physics software package for
+  atomistic simulations. It performs DFT calculations using a mixed Gaussian
+  and plane-wave (GPW) approach, which combines the efficiency of plane waves
+  for the electron density with localized Gaussian basis sets for molecular
+  orbitals. This makes CP2K particularly efficient for large systems.
+
+  Key capabilities:
+  - DFT with GPW method (fast for large systems)
+  - Hybrid functionals with auxiliary density matrix methods
+  - Semi-empirical methods (DFTB, xTB)
+  - Classical molecular dynamics with various force fields
+  - QM/MM calculations
+  - Linear-scaling DFT for very large systems
+
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
+environment:
+  modules:
+    - conda/2025-09-25
+  conda_env: cp2k_env
+  conda_packages:
+    - cp2k=2024.2=openblas_openmpi_hae4b963_0
+  pip_packages: []
+  env_vars:
+    OMPI_MCA_btl_vader_single_copy_mechanism: "none"  # Avoid MPI shared memory warnings
+    OMP_NUM_THREADS: "1"  # Control OpenMP threads
+  setup_commands:
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - conda activate cp2k_env
+    - export OMPI_MCA_btl_vader_single_copy_mechanism=none
+
+installation:
+  prerequisites:
+    - Conda (miniconda or anaconda)
+    - "On Polaris: conda is available at /soft/applications/conda/"
+  steps:
+    - "# Initialize conda"
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - "# Create environment"
+    - conda create -n cp2k_env python=3.11 -y
+    - conda activate cp2k_env
+    - "# Install CP2K from conda-forge (with OpenBLAS and OpenMPI)"
+    - conda install -c conda-forge cp2k=2024.2 -y
+  verification: mpirun -np 1 --allow-run-as-root cp2k.psmp --version
+  notes: |
+    The conda-forge CP2K package provides several executables:
+    - cp2k.psmp: MPI+OpenMP parallel (recommended)
+    - cp2k.ssmp: OpenMP only (serial MPI)
+    - cp2k.popt: MPI only (no OpenMP)
+
+    CP2K requires basis set and potential files which are included with
+    the conda package in $CONDA_PREFIX/share/cp2k/data/. The CP2K_DATA_DIR
+    environment variable should be set automatically.
+
+    Common basis sets:
+    - DZVP-GTH: Double-zeta valence polarized with GTH pseudopotentials
+    - TZV2P-GTH: Triple-zeta with 2 polarization functions
+    - MOLOPT: Optimized for molecular calculations
+
+    GTH (Goedecker-Teter-Hutter) pseudopotentials are most commonly used
+    and are optimized for the GPW method.
+
+execution:
+  function: |
+    def run_cp2k(run_type="ENERGY", cutoff=300, max_scf=50):
+        """
+        Run CP2K DFT calculations using the GPW method.
+
+        Parameters:
+        -----------
+        run_type : str
+            Type of calculation:
+            - 'ENERGY': Single-point energy
+            - 'GEO_OPT': Geometry optimization
+            - 'CELL_OPT': Cell and geometry optimization
+            - 'MD': Molecular dynamics
+            - 'ENERGY_FORCE': Energy and forces
+        cutoff : int
+            Plane-wave cutoff for the density in Ry.
+            Controls the grid for electron density expansion.
+            - 200-300: Fast, reasonable for testing
+            - 400-500: Production quality
+            - 600+: High precision
+        max_scf : int
+            Maximum number of SCF iterations (default: 50)
+
+        Returns:
+        --------
+        dict : Results including total energy (hartree and eV)
+
+        Example:
+        --------
+        # Quick energy calculation
+        result = run_cp2k(run_type='ENERGY', cutoff=300)
+
+        # Geometry optimization
+        result = run_cp2k(run_type='GEO_OPT', cutoff=400, max_scf=100)
+
+        # Production calculation
+        result = run_cp2k(run_type='ENERGY', cutoff=500)
+        """
+        import subprocess
+        import os
+        import tempfile
+        import textwrap
+
+        output_dir = tempfile.mkdtemp(prefix='cp2k_')
+        project_name = "cp2k_job"
+
+        # CP2K input for water molecule using GTH pseudopotentials
+        # QUICKSTEP is the module for DFT with the GPW method
+        input_content = textwrap.dedent(f"""
+            &GLOBAL
+              PROJECT {project_name}
+              RUN_TYPE {run_type}
+              PRINT_LEVEL MEDIUM
+            &END GLOBAL
+
+            &FORCE_EVAL
+              METHOD QUICKSTEP
+              &DFT
+                BASIS_SET_FILE_NAME GTH_BASIS_SETS
+                POTENTIAL_FILE_NAME GTH_POTENTIALS
+                &MGRID
+                  CUTOFF {cutoff}
+                &END MGRID
+                &QS
+                  EPS_DEFAULT 1.0E-10
+                &END QS
+                &SCF
+                  SCF_GUESS ATOMIC
+                  EPS_SCF 1.0E-6
+                  MAX_SCF {max_scf}
+                &END SCF
+                &XC
+                  &XC_FUNCTIONAL PBE
+                  &END XC_FUNCTIONAL
+                &END XC
+              &END DFT
+              &SUBSYS
+                &CELL
+                  ABC 10.0 10.0 10.0
+                  PERIODIC NONE
+                &END CELL
+                &COORD
+                  O   0.000000    0.000000    0.000000
+                  H   0.000000    0.000000    1.000000
+                  H   0.942809    0.000000   -0.333333
+                &END COORD
+                &KIND O
+                  BASIS_SET DZVP-GTH
+                  POTENTIAL GTH-PBE-q6
+                &END KIND
+                &KIND H
+                  BASIS_SET DZVP-GTH
+                  POTENTIAL GTH-PBE-q1
+                &END KIND
+              &END SUBSYS
+            &END FORCE_EVAL
+        """)
+
+        # Shell script with conda activation and CP2K data path detection
+        run_script = textwrap.dedent(f"""
+            #!/bin/bash
+            source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+            conda activate cp2k_env
+
+            # MPI and OpenMP settings
+            export OMPI_MCA_btl_vader_single_copy_mechanism=none
+            export OMP_NUM_THREADS=1
+
+            cd {output_dir}
+
+            # Find CP2K executable
+            CP2K_BIN=""
+            if [ -x "$CONDA_PREFIX/bin/cp2k.psmp" ]; then
+                CP2K_BIN="$CONDA_PREFIX/bin/cp2k.psmp"
+            elif [ -x "$CONDA_PREFIX/bin/cp2k.ssmp" ]; then
+                CP2K_BIN="$CONDA_PREFIX/bin/cp2k.ssmp"
+            elif [ -x "$CONDA_PREFIX/bin/cp2k" ]; then
+                CP2K_BIN="$CONDA_PREFIX/bin/cp2k"
+            fi
+
+            # Set CP2K data directory for basis sets and potentials
+            if [ -d "$CONDA_PREFIX/share/cp2k/data" ]; then
+                export CP2K_DATA_DIR="$CONDA_PREFIX/share/cp2k/data"
+            fi
+
+            if [ -n "$CP2K_BIN" ]; then
+                echo "Using: $CP2K_BIN"
+                echo "CP2K_DATA_DIR: $CP2K_DATA_DIR"
+                mpirun -np 1 --allow-run-as-root $CP2K_BIN -i {project_name}.inp -o {project_name}.out 2>&1
+            else
+                echo "ERROR: No cp2k executable found"
+                exit 1
+            fi
+
+            # Check completion
+            if grep -q "ENERGY|" {project_name}.out 2>/dev/null; then
+                echo "SUCCESS"
+            elif grep -q "T I M I N G" {project_name}.out 2>/dev/null; then
+                echo "SUCCESS"
+            else
+                echo "FAILED"
+            fi
+        """)
+
+        # Write input files
+        input_path = os.path.join(output_dir, f"{project_name}.inp")
+        script_path = os.path.join(output_dir, "run_cp2k.sh")
+
+        with open(input_path, "w") as f:
+            f.write(input_content)
+
+        with open(script_path, "w") as f:
+            f.write(run_script)
+
+        os.chmod(script_path, 0o755)
+
+        result = subprocess.run(
+            ["bash", script_path],
+            capture_output=True,
+            text=True,
+            cwd=output_dir
+        )
+
+        # Parse results
+        output_file = os.path.join(output_dir, f"{project_name}.out")
+        results = {
+            "run_type": run_type,
+            "cutoff": cutoff,
+            "max_scf": max_scf,
+            "output_dir": output_dir,
+            "input_file": input_path,
+            "output_file": output_file
+        }
+
+        if os.path.exists(output_file):
+            with open(output_file, "r") as f:
+                content = f.read()
+
+            # Look for total energy
+            for line in content.split("\n"):
+                if "Total FORCE_EVAL" in line and "energy" in line.lower():
+                    try:
+                        energy = float(line.split()[-1])
+                        results["total_energy_hartree"] = energy
+                        results["total_energy_eV"] = energy * 27.2114
+                        results["status"] = "completed"
+                    except (ValueError, IndexError):
+                        pass
+
+            if "status" not in results:
+                if "T I M I N G" in content:
+                    results["status"] = "completed"
+                else:
+                    results["status"] = "failed"
+                    results["error"] = content[-2000:] if len(content) > 2000 else content
+        else:
+            results["status"] = "failed"
+            results["error"] = result.stderr or "No output file generated"
+            results["stdout"] = result.stdout
+
+        return results
+  function_name: run_cp2k
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    gpus: 0
+    walltime: "01:00:00"
+    queue: default
+  pre_commands: []
+  post_commands: []
+
+discovery_log:
+  discovered_date: "2026-02-10"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  docs_consulted:
+    - https://www.cp2k.org/howto
+  attempts: 48
+  notes: |
+    Successfully installed CP2K 2024.2 via conda-forge. The package includes
+    the cp2k.psmp executable (MPI+OpenMP parallel version).
+
+    Tested with water molecule using PBE functional and DZVP-GTH basis set.
+    Energy converged to -17.203 hartree (-468.12 eV).
+
+    Important: The CP2K_DATA_DIR environment variable must point to the
+    directory containing basis set and potential files. The conda package
+    includes these in $CONDA_PREFIX/share/cp2k/data/.
+
+    Important: Set OMPI_MCA_btl_vader_single_copy_mechanism=none to avoid
+    MPI shared memory transport warnings.
+
+    Key finding: Execution functions must use subprocess with explicit conda
+    activation because Globus Compute workers don't inherit the conda environment.
+  claude_model: claude-sonnet-4-20250514
+
+tags:
+  - dft
+  - gpw-method
+  - materials-science
+  - qm-mm
+  - molecular-dynamics
+  - linear-scaling
