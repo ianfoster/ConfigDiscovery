@@ -144,6 +144,19 @@ discovery_log:
   docs_consulted:
   - https://manual.gromacs.org/current/install-guide/index.html
   attempts: 30
-  notes: 'GROMACS 2024.5 installed via conda. Both gmx (thread_mpi) and gmx_mpi available.'
+  notes: |
+    GROMACS 2024.5 installed via conda-forge. Both gmx (thread_mpi) and gmx_mpi available.
+
+    KNOWN ISSUE: The conda-forge GROMACS package may segfault (exit code -11) on Polaris
+    compute nodes due to CPU binary compatibility issues. The package includes multiple
+    binaries (SSE2, AVX2_256, etc.) but auto-detection may select an incompatible one.
+
+    Workaround options:
+    - Build GROMACS from source with Polaris-specific optimizations
+    - Use a containerized version
+    - Set GMX_BINARY environment variable to force specific binary
   claude_model: claude-sonnet-4-20250514
-tags: []
+tags:
+  - molecular-dynamics
+  - biomolecular
+  - known-issues

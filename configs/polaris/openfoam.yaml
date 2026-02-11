@@ -1,100 +1,424 @@
 name: openfoam
+version: "2412"
+description: |
+  OpenFOAM (Open Source Field Operation and Manipulation) is a free, open-source
+  CFD software package. This configuration uses the ESI-OpenCFD version installed
+  via conda-forge.
+
+  Key capabilities:
+  - Incompressible and compressible flow solvers
+  - Turbulence modeling (RANS, LES, DES)
+  - Heat transfer and multiphase flows
+  - Mesh generation tools (blockMesh, snappyHexMesh)
+
 hpc_system: polaris
 endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+
 environment:
-  modules:
-  - PrgEnv-gnu
+  modules: []
   conda_env: openfoam_env
   conda_packages:
-  - openfoam
+    - openfoam=2412
   pip_packages: []
   env_vars: {}
   setup_commands:
-  - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
-  - conda activate openfoam_env
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - conda activate openfoam_env
+
 installation:
-  steps: []
-  verification: icoFoam -help
+  prerequisites:
+    - Conda (available on Polaris at /soft/applications/conda/)
+  steps:
+    - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    - conda create -n openfoam_env python=3.11 -y
+    - conda activate openfoam_env
+    - conda install -c conda-forge openfoam=2412 -y
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate openfoam_env && \
+    icoFoam -help | head -5
+  notes: |
+    Uses ESI-OpenCFD OpenFOAM version (2412) from conda-forge.
+    Includes all standard solvers and utilities.
+
 execution:
-  function: "def run_openfoam_cavity(case_name=\"cavity_simulation\", mesh_resolution=20,\
-    \ end_time=0.5, write_interval=0.1, working_dir=\"~/openfoam_cases\"):\n    import\
-    \ subprocess\n    import os\n    import shutil\n    from pathlib import Path\n\
-    \    \n    # Set up working directory\n    working_dir = os.path.expanduser(working_dir)\n\
-    \    case_dir = os.path.join(working_dir, case_name)\n    \n    # Create working\
-    \ directory\n    os.makedirs(working_dir, exist_ok=True)\n    \n    # Copy tutorial\
-    \ cavity case from OpenFOAM installation\n    conda_env_path = os.environ.get('CONDA_PREFIX',\
-    \ '/eagle/AuroraGPT/foster/conda/envs/openfoam_env')\n    tutorial_path = os.path.join(conda_env_path,\
-    \ 'tutorials', 'incompressible', 'icoFoam', 'cavity', 'cavity')\n    \n    if\
-    \ os.path.exists(case_dir):\n        shutil.rmtree(case_dir)\n    shutil.copytree(tutorial_path,\
-    \ case_dir)\n    \n    # Change to case directory\n    original_dir = os.getcwd()\n\
-    \    os.chdir(case_dir)\n    \n    try:\n        # Modify blockMeshDict for custom\
-    \ resolution\n        if mesh_resolution != 20:\n            with open('system/blockMeshDict',\
-    \ 'r') as f:\n                content = f.read()\n            # Replace the default\
-    \ mesh resolution (20 20 1)\n            content = content.replace('20 20 1',\
-    \ f'{mesh_resolution} {mesh_resolution} 1')\n            with open('system/blockMeshDict',\
-    \ 'w') as f:\n                f.write(content)\n        \n        # Modify controlDict\
-    \ for custom simulation time\n        with open('system/controlDict', 'r') as\
-    \ f:\n            content = f.read()\n        \n        # Update endTime and writeInterval\n\
-    \        content = content.replace('endTime         0.5;', f'endTime         {end_time};')\n\
-    \        content = content.replace('writeInterval   0.1;', f'writeInterval   {write_interval};')\n\
-    \        \n        with open('system/controlDict', 'w') as f:\n            f.write(content)\n\
-    \        \n        # Run blockMesh to generate the mesh\n        print(\"Generating\
-    \ mesh...\")\n        mesh_result = subprocess.run(['blockMesh'], \n         \
-    \                          capture_output=True, text=True, \n                \
-    \                   shell=True, executable='/bin/bash')\n        \n        if\
-    \ mesh_result.returncode != 0:\n            return {\"status\": \"error\", \"\
-    step\": \"mesh_generation\", \"error\": mesh_result.stderr}\n        \n      \
-    \  print(\"Mesh generation completed successfully\")\n        \n        # Run\
-    \ icoFoam solver\n        print(\"Running OpenFOAM simulation...\")\n        solver_result\
-    \ = subprocess.run(['icoFoam'], \n                                     capture_output=True,\
-    \ text=True,\n                                     shell=True, executable='/bin/bash')\n\
-    \        \n        if solver_result.returncode != 0:\n            return {\"status\"\
-    : \"error\", \"step\": \"simulation\", \"error\": solver_result.stderr}\n    \
-    \    \n        print(\"Simulation completed successfully\")\n        \n      \
-    \  # Check for result directories\n        result_dirs = []\n        for item\
-    \ in os.listdir('.'):\n            try:\n                float(item)\n       \
-    \         if os.path.isdir(item):\n                    result_dirs.append(item)\n\
-    \            except ValueError:\n                continue\n        \n        result_dirs.sort(key=float)\n\
-    \        \n        # Create output summary\n        return {\n            \"status\"\
-    : \"completed\",\n            \"case_directory\": case_dir,\n            \"mesh_resolution\"\
-    : f\"{mesh_resolution}x{mesh_resolution}\",\n            \"end_time\": end_time,\n\
-    \            \"write_interval\": write_interval,\n            \"result_time_steps\"\
-    : result_dirs,\n            \"total_time_steps\": len(result_dirs),\n        \
-    \    \"mesh_log\": mesh_result.stdout,\n            \"solver_log\": solver_result.stdout[-1000:]\
-    \  # Last 1000 chars of solver output\n        }\n        \n    except Exception\
-    \ as e:\n        return {\"status\": \"error\", \"step\": \"execution\", \"error\"\
-    : str(e)}\n    \n    finally:\n        # Return to original directory\n      \
-    \  os.chdir(original_dir)"
+  function: |
+    def run_openfoam_cavity(mesh_resolution=20, end_time=0.5, write_interval=0.05,
+                            output_dir="~/openfoam_run"):
+        import subprocess
+        import os
+        import textwrap
+
+        output_dir = os.path.expanduser(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        for subdir in ['0', 'constant', 'system']:
+            os.makedirs(os.path.join(output_dir, subdir), exist_ok=True)
+
+        # blockMeshDict - use format() to avoid YAML brace issues
+        block_mesh = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       dictionary;
+                object      blockMeshDict;
+            }
+
+            scale   0.1;
+
+            vertices
+            (
+                (0 0 0)
+                (1 0 0)
+                (1 1 0)
+                (0 1 0)
+                (0 0 0.1)
+                (1 0 0.1)
+                (1 1 0.1)
+                (0 1 0.1)
+            );
+
+            blocks
+            (
+                hex (0 1 2 3 4 5 6 7) (MESH MESH 1) simpleGrading (1 1 1)
+            );
+
+            edges
+            (
+            );
+
+            boundary
+            (
+                movingWall
+                {
+                    type wall;
+                    faces
+                    (
+                        (3 7 6 2)
+                    );
+                }
+                fixedWalls
+                {
+                    type wall;
+                    faces
+                    (
+                        (0 4 7 3)
+                        (2 6 5 1)
+                        (1 5 4 0)
+                    );
+                }
+                frontAndBack
+                {
+                    type empty;
+                    faces
+                    (
+                        (0 3 2 1)
+                        (4 5 6 7)
+                    );
+                }
+            );
+        """).replace("MESH", str(mesh_resolution))
+
+        with open(os.path.join(output_dir, 'system', 'blockMeshDict'), 'w') as f:
+            f.write(block_mesh)
+
+        control_dict = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       dictionary;
+                object      controlDict;
+            }
+
+            application     icoFoam;
+            startFrom       startTime;
+            startTime       0;
+            stopAt          endTime;
+            endTime         END_TIME;
+            deltaT          0.005;
+            writeControl    runTime;
+            writeInterval   WRITE_INT;
+            purgeWrite      0;
+            writeFormat     ascii;
+            writePrecision  6;
+            writeCompression off;
+            timeFormat      general;
+            timePrecision   6;
+            runTimeModifiable true;
+        """).replace("END_TIME", str(end_time)).replace("WRITE_INT", str(write_interval))
+
+        with open(os.path.join(output_dir, 'system', 'controlDict'), 'w') as f:
+            f.write(control_dict)
+
+        fv_schemes = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       dictionary;
+                object      fvSchemes;
+            }
+
+            ddtSchemes
+            {
+                default         Euler;
+            }
+
+            gradSchemes
+            {
+                default         Gauss linear;
+                grad(p)         Gauss linear;
+            }
+
+            divSchemes
+            {
+                default         none;
+                div(phi,U)      Gauss linear;
+            }
+
+            laplacianSchemes
+            {
+                default         Gauss linear orthogonal;
+            }
+
+            interpolationSchemes
+            {
+                default         linear;
+            }
+
+            snGradSchemes
+            {
+                default         orthogonal;
+            }
+        """)
+
+        with open(os.path.join(output_dir, 'system', 'fvSchemes'), 'w') as f:
+            f.write(fv_schemes)
+
+        fv_solution = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       dictionary;
+                object      fvSolution;
+            }
+
+            solvers
+            {
+                p
+                {
+                    solver          PCG;
+                    preconditioner  DIC;
+                    tolerance       1e-06;
+                    relTol          0.05;
+                }
+
+                pFinal
+                {
+                    solver          PCG;
+                    preconditioner  DIC;
+                    tolerance       1e-06;
+                    relTol          0;
+                }
+
+                U
+                {
+                    solver          smoothSolver;
+                    smoother        symGaussSeidel;
+                    tolerance       1e-05;
+                    relTol          0;
+                }
+            }
+
+            PISO
+            {
+                nCorrectors     2;
+                nNonOrthogonalCorrectors 0;
+                pRefCell        0;
+                pRefValue       0;
+            }
+        """)
+
+        with open(os.path.join(output_dir, 'system', 'fvSolution'), 'w') as f:
+            f.write(fv_solution)
+
+        transport_props = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       dictionary;
+                object      transportProperties;
+            }
+
+            nu              [0 2 -1 0 0 0 0] 0.01;
+        """)
+
+        with open(os.path.join(output_dir, 'constant', 'transportProperties'), 'w') as f:
+            f.write(transport_props)
+
+        u_file = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       volVectorField;
+                object      U;
+            }
+
+            dimensions      [0 1 -1 0 0 0 0];
+
+            internalField   uniform (0 0 0);
+
+            boundaryField
+            {
+                movingWall
+                {
+                    type            fixedValue;
+                    value           uniform (1 0 0);
+                }
+
+                fixedWalls
+                {
+                    type            noSlip;
+                }
+
+                frontAndBack
+                {
+                    type            empty;
+                }
+            }
+        """)
+
+        with open(os.path.join(output_dir, '0', 'U'), 'w') as f:
+            f.write(u_file)
+
+        p_file = textwrap.dedent("""
+            FoamFile
+            {
+                version     2.0;
+                format      ascii;
+                class       volScalarField;
+                object      p;
+            }
+
+            dimensions      [0 2 -2 0 0 0 0];
+
+            internalField   uniform 0;
+
+            boundaryField
+            {
+                movingWall
+                {
+                    type            zeroGradient;
+                }
+
+                fixedWalls
+                {
+                    type            zeroGradient;
+                }
+
+                frontAndBack
+                {
+                    type            empty;
+                }
+            }
+        """)
+
+        with open(os.path.join(output_dir, '0', 'p'), 'w') as f:
+            f.write(p_file)
+
+        run_script = """
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+    conda activate openfoam_env
+    cd OUTPUT_DIR
+    blockMesh > blockMesh.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo "MESH_FAILED"
+        exit 1
+    fi
+    icoFoam > icoFoam.log 2>&1
+    if [ $? -ne 0 ]; then
+        echo "SOLVER_FAILED"
+        exit 1
+    fi
+    echo "SUCCESS"
+    """.replace("OUTPUT_DIR", output_dir)
+
+        result = subprocess.run(
+            run_script,
+            shell=True,
+            executable='/bin/bash',
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        result_dirs = []
+        for item in os.listdir(output_dir):
+            try:
+                float(item)
+                if os.path.isdir(os.path.join(output_dir, item)):
+                    result_dirs.append(item)
+            except ValueError:
+                continue
+        result_dirs.sort(key=float)
+
+        solver_log = ""
+        try:
+            with open(os.path.join(output_dir, 'icoFoam.log')) as f:
+                solver_log = f.read()[-1000:]
+        except:
+            pass
+
+        if result.returncode == 0 and "SUCCESS" in result.stdout:
+            return {
+                "status": "completed",
+                "output_dir": output_dir,
+                "mesh_resolution": str(mesh_resolution) + "x" + str(mesh_resolution),
+                "end_time": end_time,
+                "result_time_steps": result_dirs,
+                "total_time_steps": len(result_dirs),
+                "solver_log": solver_log
+            }
+        else:
+            return {
+                "status": "failed",
+                "output_dir": output_dir,
+                "error": result.stderr or result.stdout,
+                "solver_log": solver_log
+            }
   function_name: run_openfoam_cavity
   resources:
     nodes: 1
     cores_per_node: 4
     memory_gb: 8
-    walltime: 00:30:00
+    gpus: 0
+    walltime: "00:30:00"
     queue: debug
   pre_commands: []
   post_commands: []
+
 discovery_log:
-  discovered_date: '2026-02-09'
+  discovered_date: "2026-02-10"
+  discovery_method: "LLM-guided exploration via Globus Compute"
   docs_consulted:
-  - https://openfoam.org/download/12-linux/
-  - https://openfoam.org/download/12-linux/
-  attempts: 28
-  notes: 'OpenFOAM v12 documentation indicates that for Linux distributions other
-    than Ubuntu, compiling from source is recommended. The Polaris system appears
-    to be running Linux and uses a module system with Lmod. There seems to be a technical
-    issue with command execution functions, but I need to find if OpenFOAM is available
-    as a module or if we need to compile from source.
+    - https://openfoam.org/
+    - https://www.openfoam.com/documentation/user-guide
+  attempts: 30
+  notes: |
+    Rewrote execution function to generate OpenFOAM input files directly
+    using textwrap.dedent() to avoid YAML brace escaping issues.
 
-    OpenFOAM is available through conda-forge. Version 2412 is available, which appears
-    to be the ESI-OpenCFD version rather than the Foundation version. The Foundation
-    version v12 that the user requested may not be available via conda. Let me explore
-    installation options.
-
-    OpenFOAM version 2412 (ESI-OpenCFD) was successfully installed via conda-forge.
-    While this is the ESI version and not the Foundation version, it includes all
-    necessary solvers and utilities like icoFoam and blockMesh for running CFD simulations.
-    The conda installation provides a complete OpenFOAM environment with all necessary
-    tools.'
+    Uses lid-driven cavity flow as test case - a classic CFD benchmark.
+    The icoFoam solver handles incompressible, laminar flow.
   claude_model: claude-sonnet-4-20250514
-tags: []
+
+tags:
+  - cfd
+  - fluid-dynamics
+  - incompressible-flow
+  - openfoam

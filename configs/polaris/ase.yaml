@@ -236,6 +236,7 @@ execution:
             output_files = [f for f in os.listdir(output_dir)
                           if f.endswith(('.xyz', '.traj', '.log', '.txt'))]
             results['output_files'] = output_files
+            results['status'] = 'completed'
 
             print(f"\nCalculation completed successfully!")
             return results
@@ -244,7 +245,7 @@ execution:
             return {
                 'output_dir': output_dir,
                 'error': str(e),
-                'success': False
+                'status': 'failed'
             }
   function_name: run_ase_calculation
   resources:
