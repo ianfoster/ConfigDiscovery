@@ -1,0 +1,107 @@
+name: namd
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules:
+  - PrgEnv-gnu
+  - cray-mpich
+  - cudnn
+  conda_packages: []
+  pip_packages: []
+  env_vars:
+    NAMD_HOME: $HOME/namd_install
+    CUDA_VISIBLE_DEVICES: '0'
+  setup_commands:
+  - export PATH=$NAMD_HOME:$PATH
+  - cd $NAMD_HOME
+installation:
+  manual_download:
+    required: true
+    url: https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=NAMD
+    license_type: free-academic
+    instructions:
+      - "Go to https://www.ks.uiuc.edu/Development/Download/download.cgi?PackageName=NAMD"
+      - "Create a free account or log in (required for download)"
+      - "Select 'NAMD 3.0.2' and platform 'Linux-x86_64-multicore-CUDA' for GPU support"
+      - "Download the tar.gz file to your local machine"
+      - "Transfer to Polaris using: configdiscovery transfer configs/polaris/namd.yaml --web"
+      - "SSH to Polaris and extract: tar xzf NAMD_3.0.2_Linux-x86_64-multicore-CUDA.tar.gz"
+      - "Move to install location: mv NAMD_3.0.2_Linux-x86_64-multicore-CUDA ~/namd_install"
+      - "Verify: ~/namd_install/namd3 --version"
+    expected_path: ~/namd_install/namd3
+    verification: ~/namd_install/namd3 --version
+    globus_transfer:
+      destination_endpoint: 05d2c76a-e867-4f67-aa57-76edeb0beda0
+      destination_path: ~/
+      source_filename: "NAMD_3.0.2*.tar.gz"
+  steps:
+    - mkdir -p ~/namd_install
+    - chmod +x ~/namd_install/namd3
+  verification: ~/namd_install/namd3 --version
+execution:
+  function: "def run_namd(config_file=None, num_cores=4, gpu_devices=None, output_dir=\"\
+    namd_output\"):\n    \"\"\"\n    Run NAMD molecular dynamics simulation.\n    If\
+    \ no config_file is provided, runs a simple test to verify NAMD works.\n    \n\
+    \    Args:\n        config_file (str): NAMD configuration file path (optional)\n\
+    \        num_cores (int): Number of processor cores to use\n        gpu_devices\
+    \ (str): Comma-separated list of GPU devices\n        output_dir (str): Directory\
+    \ for output files\n    \n    Returns:\n        dict: Simulation results with\
+    \ status and output information\n    \"\"\"\n    import subprocess\n    import\
+    \ os\n    \n    namd_exe = os.path.expanduser(\"~/namd_install/namd3\")\n    output_dir\
+    \ = os.path.abspath(output_dir)\n    os.makedirs(output_dir, exist_ok=True)\n\
+    \n    if not os.path.exists(namd_exe):\n        return {\"status\": \"failed\"\
+    , \"error\": f\"NAMD not found at {namd_exe}\"}\n\n    # If no config provided,\
+    \ just test that NAMD runs\n    if config_file is None:\n        cmd = [namd_exe,\
+    \ \"--version\"]\n        result = subprocess.run(cmd, capture_output=True, text=True)\n\
+    \        version_info = result.stdout + result.stderr\n        return {\n    \
+    \        \"status\": \"completed\",\n            \"test_mode\": True,\n       \
+    \     \"namd_version\": version_info.split(\"\\n\")[0] if version_info else \"\
+    unknown\",\n            \"output_dir\": output_dir,\n            \"note\": \"\
+    NAMD executable verified. Provide config_file for actual simulation.\"\n     \
+    \   }\n\n    # Run actual simulation with config file\n    if not os.path.exists(config_file):\n\
+    \        return {\"status\": \"failed\", \"error\": f\"Config file not found:\
+    \ {config_file}\"}\n\n    cmd = [namd_exe]\n    if num_cores:\n        cmd.append(f\"\
+    +p{num_cores}\")\n    if gpu_devices:\n        cmd.extend([\"+devices\", str(gpu_devices)])\n\
+    \    cmd.append(\"+idlepoll\")\n    cmd.append(config_file)\n\n    result = subprocess.run(cmd,\
+    \ capture_output=True, text=True, cwd=output_dir)\n\n    output_files = []\n \
+    \   for f in os.listdir(output_dir):\n        if f.endswith((\".dcd\", \".log\"\
+    , \".out\", \".coor\", \".vel\", \".xsc\")):\n            output_files.append(os.path.join(output_dir,\
+    \ f))\n\n    if result.returncode == 0:\n        return {\n            \"status\"\
+    : \"completed\",\n            \"output_dir\": output_dir,\n            \"output_files\"\
+    : output_files,\n            \"stdout\": result.stdout[-2000:] if result.stdout\
+    \ else \"\",\n            \"command\": \" \".join(cmd)\n        }\n    else:\n\
+    \        return {\n            \"status\": \"failed\",\n            \"error\"\
+    : result.stderr or f\"Exit code: {result.returncode}\",\n            \"stdout\"\
+    : result.stdout[-2000:] if result.stdout else \"\"\n        }"
+  function_name: run_namd
+  resources:
+    nodes: 1
+    cores_per_node: 32
+    memory_gb: 256
+    gpus: 4
+    walltime: 02:00:00
+    queue: gpu
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://www.ks.uiuc.edu/Research/namd/2.14/ug/
+  - https://www.ks.uiuc.edu/Research/namd/2.14/ug/
+  attempts: 40
+  notes: 'NAMD 2.14 User''s Guide retrieved. NAMD is a molecular dynamics simulation
+    program from University of Illinois. It supports parallel execution, various force
+    fields (CHARMM, AMBER, etc.), and advanced features like collective variables,
+    steered MD, and free energy calculations. The software requires input files like
+    PSF structure files, PDB coordinates, and configuration files.
+
+    NAMD is not available as a module on Polaris and not available in the default
+    conda channels or bioconda. We''ll need to install it from source. NAMD is free
+    for non-commercial use.
+
+    NAMD requires download from official website with registration. The latest version
+    is 3.0.2 (2025-08-27). For Polaris (AMD EPYC + NVIDIA GPUs), the best build is
+    Linux-x86_64-multicore-CUDA for single-node GPU-accelerated runs, or Linux-x86_64-verbs-smp-CUDA
+    for multi-node InfiniBand with GPU acceleration.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

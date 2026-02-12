@@ -1,0 +1,89 @@
+name: schnetpack
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  pip_packages:
+    - schnetpack
+    - torch
+    - pytorch-lightning
+  env_vars:
+    OMP_NUM_THREADS: '4'
+installation:
+  steps:
+    - pip install torch --index-url https://download.pytorch.org/whl/cpu
+    - pip install schnetpack pytorch-lightning
+  verification: |
+    python -c "import schnetpack; import torch; print(f'SchNetPack {schnetpack.__version__}, PyTorch {torch.__version__}')"
+execution:
+  function: |
+    def run_schnetpack_training(
+        training_data=None,
+        output_dir="schnetpack_results",
+        n_atom_basis=64,
+        n_interactions=3,
+        cutoff=5.0,
+        max_epochs=10,
+        batch_size=16
+    ):
+        """
+        Train SchNetPack model or run test.
+        """
+        import os
+        import json
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        import schnetpack as spk
+        import torch
+
+        # Test model creation
+        pairwise_distance = spk.atomistic.PairwiseDistances()
+        radial_basis = spk.nn.GaussianRBF(n_rbf=20, cutoff=cutoff)
+
+        representation = spk.representation.SchNet(
+            n_atom_basis=n_atom_basis,
+            n_filters=n_atom_basis,
+            n_interactions=n_interactions,
+            radial_basis=radial_basis,
+            cutoff_fn=spk.nn.CosineCutoff(cutoff),
+        )
+
+        pred_module = spk.atomistic.Atomwise(
+            n_in=n_atom_basis,
+            output_key="energy"
+        )
+
+        nnp = spk.model.NeuralNetworkPotential(
+            representation=representation,
+            input_modules=[pairwise_distance],
+            output_modules=[pred_module],
+            postprocessors=[spk.transform.CastTo64()]
+        )
+
+        results = {
+            "status": "completed",
+            "schnetpack_version": spk.__version__,
+            "torch_version": torch.__version__,
+            "cuda_available": torch.cuda.is_available(),
+            "model_type": type(nnp).__name__,
+            "n_parameters": sum(p.numel() for p in nnp.parameters()),
+            "output_dir": output_dir
+        }
+
+        with open(os.path.join(output_dir, "results.json"), "w") as f:
+            json.dump(results, f)
+
+        return results
+  function_name: run_schnetpack_training
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 64
+    walltime: 02:00:00
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'SchNetPack ML potentials on Aurora with CPU PyTorch.'
+tags: [machine_learning, neural_network, potentials]

@@ -1,0 +1,174 @@
+name: deepmd-kit
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_env: deepmd-kit
+  conda_packages:
+  - deepmd-kit=3.1.2=cpu_py311h1befe42_mpi_openmpi_1
+  - python=3.11
+  pip_packages: []
+  env_vars:
+    DP_BACKEND: tensorflow
+    OMP_NUM_THREADS: '8'
+    OMPI_MCA_opal_cuda_support: 'true'
+  setup_commands:
+  - source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh
+  - conda activate deepmd-kit
+installation:
+  steps: []
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate deepmd-kit && \
+    dp --version && python -c "import deepmd; print(f'DeePMD-kit v{deepmd.__version__} ready')"
+execution:
+  function: "def run_deepmd_kit(task_type=\"train\", input_file=None, model_file=None,\
+    \ data_dir=None, backend=\"tensorflow\", output_dir=\"./deepmd_output\", **kwargs):\n\
+    \    \"\"\"\n    Run DeePMD-kit tasks for deep learning potential energy surface\
+    \ modeling.\n    \n    Parameters:\n    - task_type: str - Type of task (\"train\"\
+    , \"test\", \"freeze\", \"compress\", \"convert-backend\")\n    - input_file:\
+    \ str - Path to input configuration file (JSON for training)\n    - model_file:\
+    \ str - Path to model file (.pb, .pth, etc.)\n    - data_dir: str - Directory\
+    \ containing training/testing data\n    - backend: str - Backend to use (\"tensorflow\"\
+    , \"pytorch\", \"paddle\", \"jax\")\n    - output_dir: str - Output directory\
+    \ for results\n    \"\"\"\n    import subprocess\n    import os\n    import json\n\
+    \    import tempfile\n    \n    # Create output directory\n    os.makedirs(output_dir,\
+    \ exist_ok=True)\n    os.chdir(output_dir)\n    \n    results = {\"task\": task_type,\
+    \ \"backend\": backend, \"output_dir\": os.path.abspath(output_dir)}\n    \n \
+    \   # Set backend environment variable\n    os.environ[\"DP_BACKEND\"] = backend\n\
+    \    \n    if task_type == \"train\":\n        # Training a neural network potential\n\
+    \        if input_file is None:\n            # Create a sample training input\
+    \ file\n            sample_input = {\n                \"model\": {\n         \
+    \           \"type_map\": [\"H\", \"O\"],\n                    \"descriptor\"\
+    : {\n                        \"type\": \"se_e2_a\",\n                        \"\
+    sel\": [46, 92],\n                        \"rcut_smth\": 0.50,\n             \
+    \           \"rcut\": 6.00,\n                        \"neuron\": [25, 50, 100],\n\
+    \                        \"resnet_dt\": False,\n                        \"axis_neuron\"\
+    : 16,\n                        \"seed\": 1\n                    },\n         \
+    \           \"fitting_net\": {\n                        \"neuron\": [240, 240,\
+    \ 240],\n                        \"resnet_dt\": True,\n                      \
+    \  \"seed\": 1\n                    }\n                },\n                \"\
+    learning_rate\": {\n                    \"type\": \"exp\",\n                 \
+    \   \"decay_steps\": 5000,\n                    \"start_lr\": 0.001,\n       \
+    \             \"stop_lr\": 3.51e-8\n                },\n                \"loss\"\
+    : {\n                    \"start_pref_e\": 0.02,\n                    \"limit_pref_e\"\
+    : 1,\n                    \"start_pref_f\": 1000,\n                    \"limit_pref_f\"\
+    : 1,\n                    \"start_pref_v\": 0,\n                    \"limit_pref_v\"\
+    : 0\n                },\n                \"training\": {\n                   \
+    \ \"training_data\": {\n                        \"systems\": data_dir or \"./data/train\"\
+    ,\n                        \"batch_size\": \"auto\"\n                    },\n\
+    \                    \"validation_data\": {\n                        \"systems\"\
+    : data_dir or \"./data/valid\",\n                        \"batch_size\": \"auto\"\
+    \n                    },\n                    \"numb_steps\": 1000000,\n     \
+    \               \"seed\": 1,\n                    \"disp_file\": \"lcurve.out\"\
+    ,\n                    \"disp_freq\": 100,\n                    \"numb_test\"\
+    : 1,\n                    \"save_freq\": 1000,\n                    \"save_ckpt\"\
+    : \"model.ckpt\",\n                    \"disp_training\": True,\n            \
+    \        \"time_training\": True,\n                    \"profiling\": False,\n\
+    \                    \"profiling_file\": \"timeline.json\"\n                }\n\
+    \            }\n            input_file = \"input.json\"\n            with open(input_file,\
+    \ 'w') as f:\n                json.dump(sample_input, f, indent=2)\n         \
+    \   results[\"created_input\"] = input_file\n        \n        # Run training\n\
+    \        cmd = [f\"dp\", f\"--{backend}\", \"train\", input_file]\n        result\
+    \ = subprocess.run(cmd, capture_output=True, text=True, executable='/bin/bash')\n\
+    \        results[\"train_output\"] = result.stdout\n        results[\"train_error\"\
+    ] = result.stderr\n        results[\"train_success\"] = result.returncode == 0\n\
+    \        \n    elif task_type == \"test\":\n        # Test a trained model\n \
+    \       if model_file is None:\n            model_file = \"model.pb\" if backend\
+    \ == \"tensorflow\" else \"model.pth\"\n        \n        if not os.path.exists(model_file):\n\
+    \            results[\"error\"] = f\"Model file {model_file} not found\"\n   \
+    \         return results\n            \n        cmd = [f\"dp\", f\"--{backend}\"\
+    , \"test\", \"-m\", model_file, \"-s\", data_dir or \"./data/test\"]\n       \
+    \ result = subprocess.run(cmd, capture_output=True, text=True, executable='/bin/bash')\n\
+    \        results[\"test_output\"] = result.stdout\n        results[\"test_error\"\
+    ] = result.stderr\n        results[\"test_success\"] = result.returncode == 0\n\
+    \        \n    elif task_type == \"freeze\":\n        # Freeze a model for production\
+    \ use\n        if model_file is None:\n            model_file = \"model.ckpt\"\
+    \n            \n        frozen_model = f\"frozen_model.pb\"\n        cmd = [f\"\
+    dp\", f\"--{backend}\", \"freeze\", \"-c\", model_file, \"-o\", frozen_model]\n\
+    \        result = subprocess.run(cmd, capture_output=True, text=True, executable='/bin/bash')\n\
+    \        results[\"freeze_output\"] = result.stdout\n        results[\"freeze_error\"\
+    ] = result.stderr\n        results[\"freeze_success\"] = result.returncode ==\
+    \ 0\n        results[\"frozen_model\"] = os.path.abspath(frozen_model) if result.returncode\
+    \ == 0 else None\n        \n    elif task_type == \"convert-backend\":\n     \
+    \   # Convert model between backends\n        if model_file is None:\n       \
+    \     results[\"error\"] = \"model_file required for backend conversion\"\n  \
+    \          return results\n            \n        target_backend = kwargs.get(\"\
+    target_backend\", \"pytorch\" if backend == \"tensorflow\" else \"tensorflow\"\
+    )\n        output_model = f\"model_converted.{'pth' if target_backend == 'pytorch'\
+    \ else 'pb'}\"\n        \n        cmd = [f\"dp\", \"convert-backend\", model_file,\
+    \ output_model]\n        result = subprocess.run(cmd, capture_output=True, text=True,\
+    \ executable='/bin/bash')\n        results[\"convert_output\"] = result.stdout\n\
+    \        results[\"convert_error\"] = result.stderr\n        results[\"convert_success\"\
+    ] = result.returncode == 0\n        results[\"converted_model\"] = os.path.abspath(output_model)\
+    \ if result.returncode == 0 else None\n        \n    elif task_type == \"compress\"\
+    :\n        # Compress a model for efficiency\n        if model_file is None:\n\
+    \            results[\"error\"] = \"model_file required for compression\"\n  \
+    \          return results\n            \n        compressed_model = f\"compressed_model.pb\"\
+    \n        cmd = [f\"dp\", f\"--{backend}\", \"compress\", \"-i\", model_file,\
+    \ \"-o\", compressed_model]\n        result = subprocess.run(cmd, capture_output=True,\
+    \ text=True, executable='/bin/bash')\n        results[\"compress_output\"] = result.stdout\n\
+    \        results[\"compress_error\"] = result.stderr\n        results[\"compress_success\"\
+    ] = result.returncode == 0\n        results[\"compressed_model\"] = os.path.abspath(compressed_model)\
+    \ if result.returncode == 0 else None\n        \n    elif task_type == \"show\"\
+    :\n        # Show model information\n        if model_file is None:\n        \
+    \    results[\"error\"] = \"model_file required to show model info\"\n       \
+    \     return results\n            \n        cmd = [f\"dp\", \"show\", model_file]\n\
+    \        result = subprocess.run(cmd, capture_output=True, text=True, executable='/bin/bash')\n\
+    \        results[\"show_output\"] = result.stdout\n        results[\"show_error\"\
+    ] = result.stderr\n        results[\"show_success\"] = result.returncode == 0\n\
+    \        \n    elif task_type == \"python_api\":\n        # Demonstrate Python\
+    \ API usage\n        try:\n            import deepmd\n            import numpy\
+    \ as np\n            \n            results[\"deepmd_version\"] = deepmd.__version__\n\
+    \            results[\"available_backends\"] = []\n            \n            #\
+    \ Check available backends\n            try:\n                import deepmd.tf\n\
+    \                results[\"available_backends\"].append(\"tensorflow\")\n    \
+    \        except ImportError:\n                pass\n                \n       \
+    \     try:\n                import deepmd.pt  \n                results[\"available_backends\"\
+    ].append(\"pytorch\")\n            except ImportError:\n                pass\n\
+    \                \n            # If we have a model file, try to load it\n   \
+    \         if model_file and os.path.exists(model_file):\n                if backend\
+    \ == \"tensorflow\":\n                    from deepmd.tf.infer import DeepPot\n\
+    \                    dp = DeepPot(model_file)\n                    results[\"\
+    model_type_map\"] = dp.get_type_map()\n                    results[\"model_cutoff\"\
+    ] = dp.get_rcut()\n                elif backend == \"pytorch\":\n            \
+    \        from deepmd.pt.model.model import get_model\n                    # Note:\
+    \ PyTorch model loading would require specific implementation\n              \
+    \      results[\"pytorch_model_note\"] = \"PyTorch model loading requires specific\
+    \ setup\"\n                    \n            results[\"python_api_success\"] =\
+    \ True\n            \n        except Exception as e:\n            results[\"python_api_error\"\
+    ] = str(e)\n            results[\"python_api_success\"] = False\n    \n    else:\n\
+    \        results[\"error\"] = f\"Unknown task_type: {task_type}\"\n        \n\
+    \    results[\"status\"] = \"completed\" if \"error\" not in results else \"failed\"\n\
+    \    return results"
+  function_name: run_deepmd_kit
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+    walltime: 02:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://docs.deepmodeling.com/projects/deepmd/en/master/install/install-from-source.html
+  - https://docs.deepmodeling.com/projects/deepmd/en/master/install/install-from-source.html
+  attempts: 25
+  notes: 'Found documentation for deepmd-kit installation from source. The system
+    has conda, pip, git, and module system available. Need to check for available
+    modules and dependencies.
+
+    Found deepmd-kit available in conda-forge with many versions (from 0.12.6 to 3.1.2),
+    including CPU and CUDA variants. Latest version is 3.1.2 available for Python
+    3.10, 3.11, and 3.12.
+
+    System has 4 NVIDIA A100 GPUs (40GB each) with CUDA 12.8 driver support. This
+    means we can use CUDA-enabled deepmd-kit for GPU acceleration.
+
+    Successfully installed deepmd-kit v3.1.2 CPU version with OpenMPI support. It
+    supports multiple backends (TensorFlow, PyTorch, Paddle, JAX) with TensorFlow
+    as default. Key commands include train, test, freeze, convert-backend, etc.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

@@ -1,0 +1,140 @@
+name: pyscf
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_packages: []
+  pip_packages:
+  - pyscf
+  env_vars:
+    OMP_NUM_THREADS: '4'
+  setup_commands: []
+installation:
+  steps: []
+  verification: |
+    /soft/applications/conda/2025-09-25/mconda3/bin/python -c "import pyscf; from pyscf import gto, scf; mol = gto.M(atom='H 0 0 0; H 0 0 0.74', basis='sto-3g'); mf = scf.RHF(mol); mf.verbose = 0; energy = mf.kernel(); print(f'Test energy: {energy:.6f}')"
+execution:
+  function: "def run_pyscf(molecule_input=None, method=\"HF\", basis=\"6-31g\", charge=0,\
+    \ spin=0, output_file=\"pyscf_output.txt\", **kwargs):\n    \"\"\"\n    Run PySCF\
+    \ quantum chemistry calculations.\n    \n    Parameters:\n    - molecule_input:\
+    \ str or dict, molecule specification (xyz string, dict with atom/basis, or file\
+    \ path)\n    - method: str, calculation method (\"HF\", \"DFT\", \"CCSD\", \"\
+    CISD\", etc.)\n    - basis: str, basis set name\n    - charge: int, molecular\
+    \ charge\n    - spin: int, number of unpaired electrons\n    - output_file: str,\
+    \ output file name\n    - **kwargs: additional parameters for specific methods\n\
+    \    \n    Returns:\n    - dict with calculation results\n    \"\"\"\n    import\
+    \ subprocess\n    import sys\n    import os\n    import json\n    \n    # Create\
+    \ the calculation script\n    script_content = f'''\nimport pyscf\nfrom pyscf\
+    \ import gto, scf, dft, cc, ci, mp\nimport numpy as np\nimport sys\nimport json\n\
+    \n# Redirect stdout to capture output\nclass OutputCapture:\n    def __init__(self,\
+    \ filename):\n        self.terminal = sys.stdout\n        self.log = open(filename,\
+    \ \"w\")\n    \n    def write(self, message):\n        self.terminal.write(message)\n\
+    \        self.log.write(message)\n    \n    def flush(self):\n        self.terminal.flush()\n\
+    \        self.log.flush()\n    \n    def close(self):\n        self.log.close()\n\
+    \noutput_capture = OutputCapture(\"{output_file}\")\nsys.stdout = output_capture\n\
+    \ntry:\n    print(\"=\"*50)\n    print(\"PySCF Quantum Chemistry Calculation\"\
+    )\n    print(\"=\"*50)\n    \n    # Parse molecule input\n    molecule_input =\
+    \ \"\"\"{molecule_input}\"\"\"\n    \n    if molecule_input.startswith(\"{{\"\
+    ) and molecule_input.endswith(\"}}\"):\n        # JSON format with atom and other\
+    \ parameters\n        mol_data = json.loads(molecule_input)\n        mol = gto.M(\n\
+    \            atom=mol_data.get(\"atom\", \"H 0 0 0; H 0 0 0.74\"),\n         \
+    \   basis=mol_data.get(\"basis\", \"{basis}\"),\n            charge=mol_data.get(\"\
+    charge\", {charge}),\n            spin=mol_data.get(\"spin\", {spin}),\n     \
+    \       verbose=4\n        )\n    elif molecule_input.endswith((\".xyz\", \".mol\"\
+    )):\n        # File input\n        with open(molecule_input, \"r\") as f:\n  \
+    \          content = f.read().strip()\n        mol = gto.M(atom=content, basis=\"\
+    {basis}\", charge={charge}, spin={spin}, verbose=4)\n    elif molecule_input and\
+    \ len(molecule_input.split()) > 1:\n        # Direct atom string\n        mol\
+    \ = gto.M(atom=molecule_input, basis=\"{basis}\", charge={charge}, spin={spin},\
+    \ verbose=4)\n    else:\n        # Default H2 molecule\n        mol = gto.M(\n\
+    \            atom=\"H 0 0 0; H 0 0 0.74\",\n            basis=\"{basis}\",\n \
+    \           charge={charge},\n            spin={spin},\n            verbose=4\n\
+    \        )\n    \n    print(f\"Molecule: {{mol.atom}}\")\n    print(f\"Basis set:\
+    \ {{mol.basis}}\")\n    print(f\"Number of electrons: {{mol.nelectron}}\")\n \
+    \   print(f\"Charge: {{mol.charge}}\")\n    print(f\"Spin: {{mol.spin}}\")\n \
+    \   print(f\"Nuclear repulsion energy: {{mol.energy_nuc():.8f}} hartree\")\n \
+    \   print()\n    \n    method = \"{method}\".upper()\n    results = {{\"method\"\
+    : method, \"basis\": \"{basis}\"}}\n    \n    # Perform calculation based on method\n\
+    \    if method == \"HF\":\n        print(\"Running Hartree-Fock calculation...\"\
+    )\n        if mol.spin == 0:\n            mf = scf.RHF(mol)\n        else:\n \
+    \           mf = scf.UHF(mol)\n        energy = mf.kernel()\n        results[\"\
+    hf_energy\"] = float(energy)\n        results[\"converged\"] = mf.converged\n\
+    \        \n    elif method.startswith(\"DFT\") or method in [\"B3LYP\", \"PBE\"\
+    , \"M06\", \"wB97X-D\"]:\n        xc_functional = \"B3LYP\"\
+    \ if method == \"DFT\" else method\n        print(f\"Running DFT calculation with\
+    \ {{xc_functional}} functional...\")\n        if mol.spin == 0:\n            mf\
+    \ = dft.RKS(mol)\n        else:\n            mf = dft.UKS(mol)\n        mf.xc\
+    \ = xc_functional\n        energy = mf.kernel()\n        results[\"dft_energy\"\
+    ] = float(energy)\n        results[\"xc_functional\"] = xc_functional\n      \
+    \  results[\"converged\"] = mf.converged\n        \n    elif method == \"CCSD\"\
+    :\n        print(\"Running CCSD calculation...\")\n        # First do HF\n   \
+    \     if mol.spin == 0:\n            mf = scf.RHF(mol)\n        else:\n      \
+    \      mf = scf.UHF(mol)\n        hf_energy = mf.kernel()\n        \n        #\
+    \ Then CCSD\n        mycc = cc.CCSD(mf)\n        ccsd_corr_energy, t1, t2 = mycc.kernel()\n\
+    \        total_energy = hf_energy + ccsd_corr_energy\n        \n        results[\"\
+    hf_energy\"] = float(hf_energy)\n        results[\"ccsd_correlation_energy\"]\
+    \ = float(ccsd_corr_energy)\n        results[\"ccsd_total_energy\"] = float(total_energy)\n\
+    \        results[\"converged\"] = mycc.converged\n        \n    elif method ==\
+    \ \"CISD\":\n        print(\"Running CISD calculation...\")\n        # First do\
+    \ HF\n        if mol.spin == 0:\n            mf = scf.RHF(mol)\n        else:\n\
+    \            mf = scf.UHF(mol)\n        hf_energy = mf.kernel()\n        \n  \
+    \      # Then CISD\n        myci = ci.CISD(mf)\n        cisd_energy, civec = myci.kernel()\n\
+    \        \n        results[\"hf_energy\"] = float(hf_energy)\n        results[\"\
+    cisd_energy\"] = float(cisd_energy)\n        results[\"converged\"] = myci.converged\n\
+    \        \n    elif method == \"MP2\":\n        print(\"Running MP2 calculation...\"\
+    )\n        # First do HF\n        if mol.spin == 0:\n            mf = scf.RHF(mol)\n\
+    \        else:\n            mf = scf.UHF(mol)\n        hf_energy = mf.kernel()\n\
+    \        \n        # Then MP2\n        mp2 = mp.MP2(mf)\n        mp2_corr_energy,\
+    \ t2 = mp2.kernel()\n        total_energy = hf_energy + mp2_corr_energy\n    \
+    \    \n        results[\"hf_energy\"] = float(hf_energy)\n        results[\"mp2_correlation_energy\"\
+    ] = float(mp2_corr_energy)\n        results[\"mp2_total_energy\"] = float(total_energy)\n\
+    \        \n    else:\n        raise ValueError(f\"Unsupported method: {{method}}\"\
+    )\n    \n    print()\n    print(\"=\"*50)\n    print(\"Calculation Results:\"\
+    )\n    print(\"=\"*50)\n    for key, value in results.items():\n        if isinstance(value,\
+    \ float):\n            print(f\"{{key}}: {{value:.8f}}\")\n        else:\n   \
+    \         print(f\"{{key}}: {{value}}\")\n    \n    print()\n    print(\"Calculation\
+    \ completed successfully!\")\n    \n    # Save results to JSON\n    results_file\
+    \ = \"{output_file}\".replace(\".txt\", \"_results.json\")\n    with open(results_file,\
+    \ \"w\") as f:\n        json.dump(results, f, indent=2)\n    \n    print(f\"Results\
+    \ saved to {{results_file}}\")\n    \nexcept Exception as e:\n    print(f\"Error\
+    \ during calculation: {{str(e)}}\")\n    import traceback\n    traceback.print_exc()\n\
+    \    results = {{\"error\": str(e)}}\n\nfinally:\n    output_capture.close()\n\
+    \    sys.stdout = output_capture.terminal\n\n# Return results\nprint(\"Final results:\"\
+    , results)\n'''\n    \n    # Write the script to a file\n    script_file = \"\
+    pyscf_calculation.py\"\n    with open(script_file, \"w\") as f:\n        f.write(script_content)\n\
+    \    \n    # Run the script\n    result = subprocess.run([sys.executable, script_file],\
+    \ \n                          capture_output=True, text=True)\n    \n    if result.returncode != 0:\n\
+    \        return {\n            \"status\": \"failed\",\n            \"error\": result.stderr,\n\
+    \            \"stdout\": result.stdout\n        }\n    \n    # Try to load results\
+    \ from JSON file\n    results_file = output_file.replace(\".txt\", \"_results.json\"\
+    )\n    try:\n        if os.path.exists(results_file):\n            with open(results_file,\
+    \ \"r\") as f:\n                calculation_results = json.load(f)\n        else:\n\
+    \            calculation_results = {\"note\": \"Results file not found, check\
+    \ output file\"}\n    except Exception as e:\n        calculation_results = {\"\
+    json_error\": str(e)}\n    \n    return {\n        \"status\": \"completed\",\n    \
+    \    \"results\": calculation_results,\n        \"output_file\": output_file,\n\
+    \        \"results_file\": results_file,\n        \"stdout\": result.stdout,\n\
+    \        \"script_file\": script_file\n    }"
+  function_name: run_pyscf
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+    walltime: 01:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://pyscf.org/install.html
+  - https://pyscf.org/install.html
+  attempts: 16
+  notes: 'PySCF 2.12.1 can be successfully installed via pip on Polaris. The installation
+    includes dependencies: numpy, scipy, h5py, and setuptools.
+
+    PySCF is working well on Polaris with HF, DFT, and post-HF methods (CCSD). GPU
+    acceleration via GPU4PySCF is not available in the standard pip installation,
+    but CPU parallelization works with OMP_NUM_THREADS.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

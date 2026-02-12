@@ -1,0 +1,60 @@
+name: openfoam
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  conda_env: openfoam_env
+  conda_packages:
+    - openfoam=2412
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate openfoam_env
+installation:
+  steps:
+    - conda create -n openfoam_env -c conda-forge openfoam=2412 python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && \
+    conda activate openfoam_env && simpleFoam -help
+execution:
+  function: |
+    def run_openfoam(case_dir=None, solver="simpleFoam", output_dir="openfoam_output"):
+        """Run OpenFOAM CFD simulation."""
+        import subprocess
+        import os
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        conda_activate = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate openfoam_env && "
+
+        # Test mode - just verify solver works
+        if case_dir is None:
+            cmd = f"{conda_activate}{solver} -help"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+            return {
+                "status": "completed" if result.returncode == 0 else "failed",
+                "solver": solver,
+                "help": result.stdout[:500],
+                "test_mode": True
+            }
+
+        # Run actual case
+        cmd = f"{conda_activate}cd {case_dir} && {solver}"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=output_dir, timeout=3600)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "solver": solver,
+            "case_dir": case_dir,
+            "stdout": result.stdout[-2000:]
+        }
+  function_name: run_openfoam
+  resources:
+    nodes: 1
+    cores_per_node: 16
+    memory_gb: 64
+    walltime: 04:00:00
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'OpenFOAM 2412 on Aurora via conda-forge.'
+tags: [cfd, fluid_dynamics, engineering]

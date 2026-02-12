@@ -1,0 +1,110 @@
+name: xtb
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_env: xtb_env
+  conda_packages:
+  - xtb
+  - xtb-python
+  pip_packages:
+  - typing_extensions
+  env_vars: {}
+  setup_commands:
+  - source /soft/applications/conda/2025-09-25/mconda3/bin/activate xtb_env
+installation:
+  steps: []
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate xtb_env && \
+    xtb --version
+execution:
+  function: "def run_xtb(xyz_content=None, calculation_type=\"sp\", method=\"gfn2\", charge=0,\
+    \ uhf=0, solvent=None, output_dir=\"./xtb_output\"):\n    \"\"\"\n    Run xtb\
+    \ calculations for quantum chemistry.\n    \n    Parameters:\n    - xyz_content:\
+    \ string with molecular coordinates in XYZ format (default: water molecule)\n    - calculation_type: \"\
+    sp\" (singlepoint), \"opt\" (geometry optimization), \"hess\" (frequencies), \"\
+    md\" (molecular dynamics)\n    - method: \"gfn1\", \"gfn2\", \"gfnff\" (force\
+    \ field)\n    - charge: molecular charge (default 0)\n    - uhf: number of unpaired\
+    \ electrons (default 0)\n    - solvent: solvent name for implicit solvation (e.g.,\
+    \ \"water\", \"chcl3\", \"dmso\")\n    - output_dir: directory for output files\n\
+    \    \n    Returns:\n    - Dictionary with calculation results including energy,\
+    \ files generated, etc.\n    \"\"\"\n    import subprocess\n    import os\n  \
+    \  import tempfile\n    import shutil\n    import glob\n    \n    # Default test molecule (water)\n\
+    \    if xyz_content is None:\n        xyz_content = \"\"\"3\nwater molecule\nO    0.000000    0.000000    0.117370\nH    0.756950    0.000000   -0.469480\nH   -0.756950    0.000000   -0.469480\n\"\"\"\n    \n    # Create output\
+    \ directory\n    os.makedirs(output_dir, exist_ok=True)\n    \n    # Create temporary\
+    \ working directory\n    with tempfile.TemporaryDirectory() as tmp_dir:\n    \
+    \    # Write input XYZ file\n        xyz_file = os.path.join(tmp_dir, \"input.xyz\"\
+    )\n        with open(xyz_file, 'w') as f:\n            f.write(xyz_content)\n\
+    \        \n        # Build xtb command\n        cmd = [\"xtb\", \"input.xyz\"\
+    ]\n        \n        # Add calculation type\n        if calculation_type == \"\
+    opt\":\n            cmd.append(\"--opt\")\n        elif calculation_type == \"\
+    hess\":\n            cmd.append(\"--hess\")\n        elif calculation_type ==\
+    \ \"md\":\n            cmd.append(\"--md\")\n        \n        # Add method\n\
+    \        if method == \"gfn1\":\n            cmd.extend([\"--gfn\", \"1\"])\n\
+    \        elif method == \"gfn2\":\n            cmd.extend([\"--gfn\", \"2\"])\n\
+    \        elif method == \"gfnff\":\n            cmd.append(\"--gfnff\")\n    \
+    \    \n        # Add charge and multiplicity\n        if charge != 0 or uhf !=\
+    \ 0:\n            cmd.extend([\"--chrg\", str(charge)])\n            cmd.extend([\"\
+    --uhf\", str(uhf)])\n        \n        # Add solvent\n        if solvent:\n  \
+    \          cmd.extend([\"--gbsa\", solvent])\n        \n        # Add verbose\
+    \ output\n        cmd.append(\"--verbose\")\n        \n        # Run calculation with conda activation\n\
+    \        try:\n            # Build shell command with conda activation\n            conda_activate = \"source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && conda activate xtb_env && \"\n            shell_cmd = conda_activate + \" \".join(cmd)\n            result = subprocess.run(\n                shell_cmd,\n  \
+    \              cwd=tmp_dir,\n                capture_output=True,\n          \
+    \      text=True,\n                timeout=3600,\n         \
+    \       shell=True\n            )\n            \n            # Extract\
+    \ energy from output\n            energy = None\n            if \"TOTAL ENERGY\"\
+    \ in result.stdout:\n                for line in result.stdout.split('\\n'):\n\
+    \                    if \"TOTAL ENERGY\" in line:\n                        try:\n\
+    \                            energy = float(line.split()[3])\n               \
+    \         except:\n                            pass\n                        break\n\
+    \            \n            # Copy important output files to output directory\n\
+    \            output_files = []\n            file_patterns = [\"*.xyz\", \"xtbopt.xyz\"\
+    , \"xtbtopo.mol\", \"xtbhess.txt\", \"*.log\", \"vibspectrum\", \"g98.out\"]\n\
+    \            \n            for pattern in file_patterns:\n                for\
+    \ file_path in glob.glob(os.path.join(tmp_dir, pattern)):\n                  \
+    \  dest_file = os.path.join(output_dir, os.path.basename(file_path))\n       \
+    \             shutil.copy2(file_path, dest_file)\n                    output_files.append(dest_file)\n\
+    \            \n            # Also save the full output\n            output_file\
+    \ = os.path.join(output_dir, \"xtb_output.log\")\n            with open(output_file,\
+    \ 'w') as f:\n                f.write(\"=== STDOUT ===\\n\")\n               \
+    \ f.write(result.stdout)\n                f.write(\"\\n=== STDERR ===\\n\") \n\
+    \                f.write(result.stderr)\n            output_files.append(output_file)\n\
+    \            \n            return {\n                \"status\": \"completed\" if result.returncode == 0 else \"failed\",\n                \"energy\": energy,\n                \"energy_unit\"\
+    : \"Eh\",\n                \"output_dir\": output_dir,\n                \"output_files\"\
+    : output_files,\n                \"stdout\": result.stdout,\n                \"\
+    stderr\": result.stderr,\n                \"returncode\": result.returncode,\n\
+    \                \"command\": \" \".join(cmd),\n                \"calculation_type\"\
+    : calculation_type,\n                \"method\": method\n            }\n     \
+    \       \n        except subprocess.TimeoutExpired:\n            return {\n  \
+    \              \"status\": \"failed\",\n                \"error\": \"Calculation timeout\
+    \ exceeded\",\n                \"output_dir\": output_dir\n            }\n   \
+    \     except Exception as e:\n            return {\n                \"status\"\
+    : \"failed\",\n                \"error\": str(e),\n                \"output_dir\":\
+    \ output_dir\n            }"
+  function_name: run_xtb
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    walltime: 01:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://xtb-docs.readthedocs.io/
+  - https://xtb-docs.readthedocs.io/
+  attempts: 29
+  notes: 'xtb is not installed on the system and no modules were found. Need to install
+    it via conda or compile from source.
+
+    Successfully installed xtb via conda. Created xtb_env environment with xtb v6.7.1
+    and xtb-python v22.1. Both CLI and Python API available.
+
+    xtb CLI and Python API both working correctly. Tested with water molecule optimization
+    via CLI (--opt) and singlepoint calculation via Python API. Both produced reasonable
+    energies and completed successfully.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

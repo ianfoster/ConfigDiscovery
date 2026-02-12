@@ -581,6 +581,147 @@ class ConfigRunner:
             else:
                 return {"success": False, "error": result.error, "output": result.output}
 
+    def install_dependencies(self, force: bool = False) -> dict:
+        """Install all dependencies specified in the configuration.
+
+        This includes:
+        - Creating conda environments if specified
+        - Installing conda packages
+        - Installing pip packages
+        - Running installation steps
+
+        Args:
+            force: If True, reinstall even if already present
+
+        Returns:
+            dict with 'success', 'details', and optionally 'error'
+        """
+        details = []
+        env = self.config.environment
+
+        with get_compute_client(self.config.endpoint_id) as compute:
+            # Determine base conda path
+            conda_path = "/soft/applications/conda/2025-09-25/mconda3"
+            conda_bin = f"{conda_path}/condabin/conda"
+            pip_bin = f"{conda_path}/bin/pip"
+            python_bin = f"{conda_path}/bin/python"
+
+            # Step 1: Create conda environment if specified
+            if env.conda_env:
+                env_name = env.conda_env
+                env_pip = f"{conda_path}/envs/{env_name}/bin/pip"
+
+                # Check if env exists AND has pip
+                check_cmd = f"test -x {env_pip}"
+                result = compute.run_command(check_cmd)
+
+                if not result.success or force:
+                    # Check if env exists but is broken (no pip)
+                    check_env_cmd = f"{conda_bin} env list | grep -q '^{env_name} '"
+                    env_exists = compute.run_command(check_env_cmd)
+
+                    if env_exists.success and not force:
+                        # Env exists but pip missing - try to install pip
+                        details.append(f"Conda environment {env_name} exists but incomplete, fixing...")
+                        fix_cmd = f"source {conda_path}/etc/profile.d/conda.sh && conda activate {env_name} && conda install -y pip"
+                        result = compute.run_command(fix_cmd, timeout=300)
+                        if not result.success:
+                            # Can't fix, recreate
+                            details.append(f"Recreating conda environment: {env_name}")
+                            remove_cmd = f"{conda_bin} env remove -n {env_name} -y"
+                            compute.run_command(remove_cmd, timeout=120)
+                            create_cmd = f"{conda_bin} create -n {env_name} python=3.11 pip -y"
+                            result = compute.run_command(create_cmd, timeout=600)
+                            if not result.success:
+                                return {"success": False, "error": f"Failed to create conda env: {result.error}"}
+                    else:
+                        # Create new environment
+                        create_cmd = f"{conda_bin} create -n {env_name} python=3.11 pip -y"
+                        result = compute.run_command(create_cmd, timeout=600)
+                        if result.success:
+                            details.append(f"Created conda environment: {env_name}")
+                        else:
+                            return {"success": False, "error": f"Failed to create conda env: {result.error}"}
+                else:
+                    details.append(f"Conda environment ready: {env_name}")
+
+                # Update paths for the conda env
+                pip_bin = f"{conda_path}/envs/{env_name}/bin/pip"
+                python_bin = f"{conda_path}/envs/{env_name}/bin/python"
+
+            # Step 2: Install conda packages
+            if env.conda_packages:
+                conda_activate = f"source {conda_path}/etc/profile.d/conda.sh && conda activate {env.conda_env}" if env.conda_env else ""
+                for pkg in env.conda_packages:
+                    if conda_activate:
+                        install_cmd = f"{conda_activate} && conda install -y {pkg}"
+                    else:
+                        install_cmd = f"{conda_bin} install -y {pkg}"
+
+                    result = compute.run_command(install_cmd, timeout=600)
+                    if result.success:
+                        details.append(f"Installed conda package: {pkg}")
+                    else:
+                        # Try with conda-forge
+                        if conda_activate:
+                            install_cmd = f"{conda_activate} && conda install -y -c conda-forge {pkg}"
+                        else:
+                            install_cmd = f"{conda_bin} install -y -c conda-forge {pkg}"
+                        result = compute.run_command(install_cmd, timeout=600)
+                        if result.success:
+                            details.append(f"Installed conda package (conda-forge): {pkg}")
+                        else:
+                            return {"success": False, "error": f"Failed to install conda package {pkg}: {result.error}"}
+
+            # Step 3: Install pip packages
+            if env.pip_packages:
+                # Use conda activate for pip installs when we have a conda env
+                if env.conda_env:
+                    pip_prefix = f"source {conda_path}/etc/profile.d/conda.sh && conda activate {env.conda_env} && pip"
+                else:
+                    pip_prefix = pip_bin
+
+                for pkg in env.pip_packages:
+                    # For conda envs, always install via activated environment
+                    if env.conda_env:
+                        install_cmd = f"{pip_prefix} install {pkg}"
+                    else:
+                        # Check if already installed for non-conda envs
+                        check_cmd = f"{python_bin} -c \"import {pkg.split('[')[0].replace('-', '_')}\" 2>/dev/null"
+                        result = compute.run_command(check_cmd)
+                        if result.success and not force:
+                            details.append(f"Pip package already installed: {pkg}")
+                            continue
+                        install_cmd = f"{pip_bin} install {pkg}"
+
+                    result = compute.run_command(install_cmd, timeout=300)
+                    if result.success:
+                        details.append(f"Installed pip package: {pkg}")
+                    else:
+                        return {"success": False, "error": f"Failed to install pip package {pkg}: {result.error}"}
+
+            # Step 4: Run installation steps
+            if self.config.installation.steps:
+                # Build env var exports prefix
+                env_exports = ""
+                if env.env_vars:
+                    env_exports = " && ".join(f"export {k}={v}" for k, v in env.env_vars.items()) + " && "
+
+                for step in self.config.installation.steps:
+                    # Prepend env var exports to each step
+                    full_cmd = f"{env_exports}{step}" if env_exports else step
+                    result = compute.run_command(full_cmd, timeout=600)
+                    if result.success:
+                        details.append(f"Ran: {step[:50]}...")
+                    else:
+                        # Some steps are informational (echo), don't fail on those
+                        if step.startswith("echo"):
+                            details.append(f"Info: {step}")
+                        else:
+                            return {"success": False, "error": f"Installation step failed: {step}\n{result.error}"}
+
+            return {"success": True, "details": details}
+
     def run(self, *args, **kwargs):
         """Execute the configured software."""
         with get_compute_client(self.config.endpoint_id) as compute:

@@ -1,0 +1,132 @@
+name: mdanalysis
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_packages: []
+  pip_packages:
+  - MDAnalysis
+  - MDAnalysisTests
+  env_vars: {}
+  setup_commands: []
+installation:
+  steps: []
+  verification: python -c "import MDAnalysis; from MDAnalysisTests.datafiles import
+    PSF, DCD; u = MDAnalysis.Universe(PSF, DCD); print(f'MDAnalysis {MDAnalysis.__version__}
+    working - loaded {u.atoms.n_atoms} atoms')"
+execution:
+  function: "def run_mdanalysis_analysis(topology_file=None, trajectory_file=None,\
+    \ output_dir='./mdanalysis_output', analysis_type='rmsd'):\n    \"\"\"\n    Run\
+    \ MDAnalysis analysis on molecular dynamics trajectory data.\n    \n    Parameters:\n\
+    \    - topology_file: Path to topology file (PSF, PDB, etc.) - if None, uses test\
+    \ data\n    - trajectory_file: Path to trajectory file (DCD, XTC, etc.) - if None,\
+    \ uses test data  \n    - output_dir: Directory to save results\n    - analysis_type:\
+    \ Type of analysis ('rmsd', 'rmsf', 'distance', 'radgyr')\n    \n    Returns:\
+    \ Dictionary with analysis results and output paths\n    \"\"\"\n    import MDAnalysis\
+    \ as mda\n    import numpy as np\n    import matplotlib.pyplot as plt\n    from\
+    \ MDAnalysisTests.datafiles import PSF, DCD\n    import os\n    \n    # Create\
+    \ output directory\n    os.makedirs(output_dir, exist_ok=True)\n    \n    # Use\
+    \ test data if no files provided\n    if topology_file is None:\n        topology_file\
+    \ = PSF\n    if trajectory_file is None:\n        trajectory_file = DCD\n    \n\
+    \    # Load the universe\n    u = mda.Universe(topology_file, trajectory_file)\n\
+    \    print(f'Loaded universe: {u.atoms.n_atoms} atoms, {len(u.trajectory)} frames')\n\
+    \    \n    results = {\n        'topology_file': topology_file,\n        'trajectory_file':\
+    \ trajectory_file,\n        'n_atoms': u.atoms.n_atoms,\n        'n_frames': len(u.trajectory),\n\
+    \        'output_dir': output_dir,\n        'analysis_type': analysis_type\n \
+    \   }\n    \n    if analysis_type == 'rmsd':\n        # RMSD analysis\n      \
+    \  from MDAnalysis.analysis import rms\n        ref = u.atoms.select_atoms('protein\
+    \ and name CA')\n        rmsd_analysis = rms.RMSD(u, ref, select='protein and\
+    \ name CA', ref_frame=0)\n        rmsd_analysis.run()\n        \n        # Save\
+    \ RMSD data\n        rmsd_file = os.path.join(output_dir, 'rmsd.npy')\n      \
+    \  np.save(rmsd_file, rmsd_analysis.rmsd)\n        \n        # Create plot\n \
+    \       plt.figure(figsize=(10, 6))\n        plt.plot(rmsd_analysis.rmsd[:, 1],\
+    \ rmsd_analysis.rmsd[:, 2])\n        plt.xlabel('Frame')\n        plt.ylabel('RMSD\
+    \ (\xC5)')\n        plt.title('C\u03B1 RMSD vs Reference Frame')\n        plot_file\
+    \ = os.path.join(output_dir, 'rmsd_plot.png')\n        plt.savefig(plot_file)\n\
+    \        plt.close()\n        \n        results.update({\n            'rmsd_data':\
+    \ rmsd_file,\n            'rmsd_plot': plot_file,\n            'mean_rmsd': float(np.mean(rmsd_analysis.rmsd[:,\
+    \ 2])),\n            'max_rmsd': float(np.max(rmsd_analysis.rmsd[:, 2])),\n  \
+    \          'min_rmsd': float(np.min(rmsd_analysis.rmsd[:, 2]))\n        })\n \
+    \       \n    elif analysis_type == 'rmsf':\n        # RMSF analysis  \n     \
+    \   from MDAnalysis.analysis import rms\n        ref = u.atoms.select_atoms('protein\
+    \ and name CA')\n        rmsf_analysis = rms.RMSF(ref)\n        rmsf_analysis.run()\n\
+    \        \n        # Save RMSF data\n        rmsf_file = os.path.join(output_dir,\
+    \ 'rmsf.npy')\n        np.save(rmsf_file, rmsf_analysis.rmsf)\n        \n    \
+    \    # Create plot\n        plt.figure(figsize=(12, 6))\n        plt.plot(range(len(rmsf_analysis.rmsf)),\
+    \ rmsf_analysis.rmsf)\n        plt.xlabel('Residue Index')\n        plt.ylabel('RMSF\
+    \ (\xC5)')\n        plt.title('C\u03B1 RMSF per Residue')\n        plot_file =\
+    \ os.path.join(output_dir, 'rmsf_plot.png')\n        plt.savefig(plot_file)\n\
+    \        plt.close()\n        \n        results.update({\n            'rmsf_data':\
+    \ rmsf_file,\n            'rmsf_plot': plot_file,\n            'mean_rmsf': float(np.mean(rmsf_analysis.rmsf)),\n\
+    \            'max_rmsf': float(np.max(rmsf_analysis.rmsf)),\n            'min_rmsf':\
+    \ float(np.min(rmsf_analysis.rmsf))\n        })\n        \n    elif analysis_type\
+    \ == 'radgyr':\n        # Radius of gyration\n        protein = u.select_atoms('protein')\n\
+    \        radgyr_values = []\n        for ts in u.trajectory:\n            radgyr_values.append(protein.radius_of_gyration())\n\
+    \        \n        radgyr_values = np.array(radgyr_values)\n        \n       \
+    \ # Save data\n        radgyr_file = os.path.join(output_dir, 'radius_of_gyration.npy')\n\
+    \        np.save(radgyr_file, radgyr_values)\n        \n        # Create plot\n\
+    \        plt.figure(figsize=(10, 6))\n        plt.plot(radgyr_values)\n      \
+    \  plt.xlabel('Frame')\n        plt.ylabel('Radius of Gyration (\xC5)')\n    \
+    \    plt.title('Protein Radius of Gyration')\n        plot_file = os.path.join(output_dir,\
+    \ 'radgyr_plot.png')\n        plt.savefig(plot_file)\n        plt.close()\n  \
+    \      \n        results.update({\n            'radgyr_data': radgyr_file,\n \
+    \           'radgyr_plot': plot_file,\n            'mean_radgyr': float(np.mean(radgyr_values)),\n\
+    \            'max_radgyr': float(np.max(radgyr_values)),\n            'min_radgyr':\
+    \ float(np.min(radgyr_values))\n        })\n        \n    elif analysis_type ==\
+    \ 'distance':\n        # Distance analysis between two atom groups\n        try:\n\
+    \            group1 = u.select_atoms('resid 1 and name CA')\n            group2\
+    \ = u.select_atoms('resid 50 and name CA')\n            \n            if len(group1)\
+    \ == 0 or len(group2) == 0:\n                # Fallback to first and last CA atoms\n\
+    \                ca_atoms = u.select_atoms('name CA')\n                if len(ca_atoms)\
+    \ >= 2:\n                    group1 = ca_atoms[0:1]\n                    group2\
+    \ = ca_atoms[-1:]\n                else:\n                    raise ValueError(\"\
+    Insufficient atoms for distance analysis\")\n            \n            distances\
+    \ = []\n            for ts in u.trajectory:\n                dist = np.linalg.norm(group1.center_of_mass()\
+    \ - group2.center_of_mass())\n                distances.append(dist)\n       \
+    \     \n            distances = np.array(distances)\n            \n          \
+    \  # Save data\n            dist_file = os.path.join(output_dir, 'distances.npy')\n\
+    \            np.save(dist_file, distances)\n            \n            # Create\
+    \ plot\n            plt.figure(figsize=(10, 6))\n            plt.plot(distances)\n\
+    \            plt.xlabel('Frame')\n            plt.ylabel('Distance (\xC5)')\n\
+    \            plt.title('Distance Between Selected Groups')\n            plot_file\
+    \ = os.path.join(output_dir, 'distance_plot.png')\n            plt.savefig(plot_file)\n\
+    \            plt.close()\n            \n            results.update({\n       \
+    \         'distance_data': dist_file,\n                'distance_plot': plot_file,\n\
+    \                'mean_distance': float(np.mean(distances)),\n               \
+    \ 'max_distance': float(np.max(distances)),\n                'min_distance': float(np.min(distances))\n\
+    \            })\n            \n        except Exception as e:\n            results['distance_error']\
+    \ = str(e)\n    \n    # Save summary\n    summary_file = os.path.join(output_dir,\
+    \ 'analysis_summary.txt')\n    with open(summary_file, 'w') as f:\n        f.write(f'MDAnalysis\
+    \ Analysis Results\\n')\n        f.write(f'=' * 40 + '\\n')\n        f.write(f'Analysis\
+    \ Type: {analysis_type}\\n')\n        f.write(f'Topology: {topology_file}\\n')\n\
+    \        f.write(f'Trajectory: {trajectory_file}\\n')\n        f.write(f'Atoms:\
+    \ {u.atoms.n_atoms}\\n')\n        f.write(f'Frames: {len(u.trajectory)}\\n\\n')\n\
+    \        \n        for key, value in results.items():\n            if 'mean_'\
+    \ in key or 'max_' in key or 'min_' in key:\n                f.write(f'{key.replace(\"\
+    _\", \" \").title()}: {value:.4f}\\n')\n    \n    results['summary_file'] = summary_file\n    results['status'] = 'completed'\n\
+    \    \n    print(f'Analysis complete! Results saved to {output_dir}')\n    return\
+    \ results"
+  function_name: run_mdanalysis_analysis
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    walltime: 00:30:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://www.mdanalysis.org/pages/installation_quick_start/
+  - https://www.mdanalysis.org/pages/installation_quick_start/
+  attempts: 21
+  notes: 'Polaris system has Python 3.12.12, mamba (/soft/applications/conda/2025-09-25/mconda3/condabin/mamba),
+    and pip available. Documentation recommends using mamba/conda for installation
+    from conda-forge channel.
+
+    Successfully installed MDAnalysis 2.10.0 and MDAnalysisTests via pip. All dependencies
+    including numpy, scipy, matplotlib are working. Test data is available and basic
+    functionality (loading PSF/DCD files) works correctly.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

@@ -36,9 +36,48 @@ class Environment(BaseModel):
     )
 
 
+class GlobusTransfer(BaseModel):
+    """Globus Transfer configuration for automated file transfers."""
+
+    destination_endpoint: str | None = Field(
+        default=None, description="Globus collection UUID for the HPC system"
+    )
+    destination_path: str | None = Field(
+        default=None, description="Path on the destination endpoint"
+    )
+    source_filename: str | None = Field(
+        default=None, description="Expected filename pattern (e.g., 'NAMD_3.0.2*.tar.gz')"
+    )
+
+
+class ManualDownload(BaseModel):
+    """Configuration for software requiring manual download."""
+
+    required: bool = Field(default=False, description="Whether manual download is needed")
+    url: str | None = Field(default=None, description="Download URL or registration page")
+    instructions: list[str] = Field(
+        default_factory=list, description="Step-by-step download instructions"
+    )
+    expected_path: str | None = Field(
+        default=None, description="Path where downloaded files should be placed"
+    )
+    verification: str | None = Field(
+        default=None, description="Command to verify download succeeded"
+    )
+    license_type: str | None = Field(
+        default=None, description="License type (e.g., 'free-academic', 'commercial', 'open-source')"
+    )
+    globus_transfer: GlobusTransfer | None = Field(
+        default=None, description="Globus Transfer configuration for automated upload"
+    )
+
+
 class Installation(BaseModel):
     """Software installation configuration."""
 
+    manual_download: ManualDownload | None = Field(
+        default=None, description="Manual download requirements"
+    )
     steps: list[str] = Field(
         default_factory=list, description="Installation commands"
     )

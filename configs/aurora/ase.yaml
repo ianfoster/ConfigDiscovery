@@ -1,0 +1,82 @@
+name: ase
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  conda_packages: []
+  pip_packages:
+    - ase
+  env_vars: {}
+  setup_commands: []
+installation:
+  steps:
+    - pip install ase
+  verification: |
+    python -c "import ase; from ase import Atoms; atoms = Atoms('H2', positions=[(0, 0, 0), (0, 0, 0.74)]); print(f'ASE {ase.__version__} - Created H2 with {len(atoms)} atoms')"
+execution:
+  function: |
+    def run_ase(formula="H2O", task="energy"):
+        """
+        Run basic ASE calculation.
+
+        Args:
+            formula: Chemical formula (e.g., 'H2O', 'CH4')
+            task: What to compute ('energy', 'optimize', 'vibrations')
+
+        Returns:
+            dict with calculation results
+        """
+        from ase import Atoms
+        from ase.build import molecule
+        from ase.calculators.emt import EMT
+        from ase.optimize import BFGS
+        import numpy as np
+
+        # Build molecule
+        try:
+            atoms = molecule(formula)
+        except Exception:
+            # Fallback for simple formulas
+            atoms = Atoms(formula)
+            atoms.center(vacuum=5.0)
+
+        # Use EMT calculator (fast, works for simple metals/molecules)
+        atoms.calc = EMT()
+
+        results = {
+            "formula": formula,
+            "n_atoms": len(atoms),
+            "task": task,
+            "status": "completed"
+        }
+
+        if task == "energy":
+            energy = atoms.get_potential_energy()
+            forces = atoms.get_forces()
+            results["energy_eV"] = float(energy)
+            results["max_force_eV_A"] = float(np.max(np.abs(forces)))
+
+        elif task == "optimize":
+            opt = BFGS(atoms, logfile=None)
+            opt.run(fmax=0.05)
+            energy = atoms.get_potential_energy()
+            results["optimized_energy_eV"] = float(energy)
+            results["optimized_positions"] = atoms.positions.tolist()
+
+        return results
+  function_name: run_ase
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 16
+    walltime: 00:30:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-11'
+  docs_consulted: []
+  attempts: 1
+  notes: 'Basic ASE installation for Aurora. Uses EMT calculator for testing.'
+  claude_model: claude-opus-4-5
+tags: []

@@ -1,0 +1,49 @@
+name: gromacs
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  conda_env: gromacs_env
+  conda_packages:
+    - gromacs=2026.0
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate gromacs_env
+installation:
+  steps:
+    - conda create -n gromacs_env -c conda-forge gromacs=2026.0 python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && \
+    conda activate gromacs_env && gmx --version
+execution:
+  function: |
+    def run_gromacs(task="test", output_dir="gromacs_output"):
+        """Run GROMACS simulation or test."""
+        import subprocess
+        import os
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        conda_activate = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate gromacs_env && "
+
+        if task == "test":
+            cmd = f"{conda_activate}gmx --version"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+            return {
+                "status": "completed" if result.returncode == 0 else "failed",
+                "version": result.stdout[:200],
+                "task": "test"
+            }
+
+        return {"status": "failed", "error": "Specify task"}
+  function_name: run_gromacs
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+    walltime: 01:00:00
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'GROMACS 2026.0 on Aurora via conda-forge.'
+tags: [molecular_dynamics, biomolecular]

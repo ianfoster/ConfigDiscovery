@@ -1,0 +1,107 @@
+name: pyscf
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  conda_packages: []
+  pip_packages:
+    - pyscf
+  env_vars:
+    OMP_NUM_THREADS: '4'
+  setup_commands: []
+installation:
+  steps:
+    - pip install pyscf
+  verification: |
+    python -c "import pyscf; print(f'PySCF {pyscf.__version__}')"
+execution:
+  function: |
+    def run_pyscf(xyz_string=None, method="HF", basis="6-31g", charge=0, spin=0):
+        """
+        Run PySCF calculation.
+
+        Args:
+            xyz_string: XYZ format molecular coordinates
+            method: QC method (HF, DFT, B3LYP, MP2, CCSD)
+            basis: Basis set
+            charge: Molecular charge
+            spin: Spin multiplicity - 1
+
+        Returns:
+            dict with energy and calculation info
+        """
+        from pyscf import gto, scf, dft, mp, cc
+        import numpy as np
+
+        # Default test molecule
+        if xyz_string is None:
+            xyz_string = """
+            H  0.0  0.0  0.0
+            H  0.0  0.0  0.74
+            """
+
+        # Build molecule
+        mol = gto.Mole()
+        mol.atom = xyz_string
+        mol.basis = basis
+        mol.charge = charge
+        mol.spin = spin
+        mol.build()
+
+        results = {
+            "method": method,
+            "basis": basis,
+            "n_atoms": mol.natm,
+            "n_electrons": mol.nelectron,
+            "status": "completed"
+        }
+
+        # Run calculation based on method
+        if method.upper() == "HF":
+            mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
+            energy = mf.kernel()
+            results["energy_hartree"] = float(energy)
+
+        elif method.upper() in ["DFT", "B3LYP", "PBE"]:
+            xc = "B3LYP" if method.upper() in ["DFT", "B3LYP"] else method.upper()
+            mf = dft.RKS(mol) if spin == 0 else dft.UKS(mol)
+            mf.xc = xc
+            energy = mf.kernel()
+            results["energy_hartree"] = float(energy)
+            results["xc_functional"] = xc
+
+        elif method.upper() == "MP2":
+            mf = scf.RHF(mol).run()
+            mp2 = mp.MP2(mf).run()
+            results["hf_energy_hartree"] = float(mf.e_tot)
+            results["mp2_corr_energy"] = float(mp2.e_corr)
+            results["energy_hartree"] = float(mp2.e_tot)
+
+        elif method.upper() == "CCSD":
+            mf = scf.RHF(mol).run()
+            mycc = cc.CCSD(mf).run()
+            results["hf_energy_hartree"] = float(mf.e_tot)
+            results["ccsd_corr_energy"] = float(mycc.e_corr)
+            results["energy_hartree"] = float(mycc.e_tot)
+
+        else:
+            results["status"] = "failed"
+            results["error"] = f"Unknown method: {method}"
+
+        return results
+  function_name: run_pyscf
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+    walltime: 01:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-11'
+  docs_consulted: []
+  attempts: 1
+  notes: 'PySCF quantum chemistry on Aurora.'
+  claude_model: claude-opus-4-5
+tags: []

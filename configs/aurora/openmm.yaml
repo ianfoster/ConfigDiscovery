@@ -1,0 +1,103 @@
+name: openmm
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  pip_packages:
+    - openmm
+  env_vars: {}
+installation:
+  steps:
+    - pip install openmm
+  verification: |
+    python -c "import openmm; print(f'OpenMM {openmm.__version__}')"
+execution:
+  function: |
+    def run_openmm(steps=1000, temperature=300, platform="CPU"):
+        """
+        Run OpenMM molecular dynamics simulation.
+
+        Args:
+            steps: Number of MD steps
+            temperature: Temperature in Kelvin
+            platform: Compute platform (CPU, CUDA, OpenCL)
+
+        Returns:
+            dict with simulation results
+        """
+        import openmm as mm
+        from openmm import app, unit
+        import numpy as np
+
+        # Create a simple test system (alanine dipeptide in vacuum)
+        pdb = app.PDBFile(app.Topology(), [])
+
+        # Use built-in test system
+        from openmm.app import Modeller
+
+        # Create water box test
+        forcefield = app.ForceField('amber14-all.xml', 'amber14/tip3pfb.xml')
+
+        # Simple harmonic oscillator test instead
+        system = mm.System()
+        system.addParticle(1.0)  # 1 amu particle
+
+        # Add harmonic bond
+        force = mm.HarmonicBondForce()
+        system.addForce(force)
+
+        # Use CustomExternalForce for harmonic trap
+        harmonic = mm.CustomExternalForce("0.5*k*(x^2+y^2+z^2)")
+        harmonic.addGlobalParameter("k", 100.0)
+        harmonic.addParticle(0, [])
+        system.addForce(harmonic)
+
+        integrator = mm.LangevinMiddleIntegrator(
+            temperature * unit.kelvin,
+            1.0 / unit.picosecond,
+            0.002 * unit.picoseconds
+        )
+
+        try:
+            platform_obj = mm.Platform.getPlatformByName(platform)
+            simulation = app.Simulation(
+                app.Topology(), system, integrator, platform_obj
+            )
+        except:
+            simulation = app.Simulation(
+                app.Topology(), system, integrator
+            )
+
+        # Set initial positions
+        simulation.context.setPositions([[0, 0, 0]] * unit.nanometer)
+        simulation.context.setVelocitiesToTemperature(temperature * unit.kelvin)
+
+        # Run simulation
+        energies = []
+        for i in range(steps // 100):
+            simulation.step(100)
+            state = simulation.context.getState(getEnergy=True)
+            pe = state.getPotentialEnergy().value_in_unit(unit.kilojoules_per_mole)
+            energies.append(pe)
+
+        return {
+            "status": "completed",
+            "platform": platform,
+            "steps": steps,
+            "temperature_K": temperature,
+            "n_energy_samples": len(energies),
+            "mean_pe_kj_mol": float(np.mean(energies)),
+            "std_pe_kj_mol": float(np.std(energies)),
+            "openmm_version": mm.__version__
+        }
+  function_name: run_openmm
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+    walltime: 01:00:00
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'OpenMM molecular dynamics on Aurora.'
+tags: [molecular_dynamics, simulation, biomolecular]

@@ -1,0 +1,136 @@
+name: orca
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules:
+  - cray-mpich
+  conda_packages: []
+  pip_packages: []
+  env_vars:
+    ORCA_ROOT: $HOME/software/orca
+    PATH: $HOME/software/orca:$PATH
+    LD_LIBRARY_PATH: $HOME/software/orca:$LD_LIBRARY_PATH
+    OMP_NUM_THREADS: '1'
+  setup_commands:
+  - export ORCA_ROOT=$HOME/software/orca
+  - export PATH=$ORCA_ROOT:$PATH
+  - export LD_LIBRARY_PATH=$ORCA_ROOT:$LD_LIBRARY_PATH
+  - export OMP_NUM_THREADS=1
+installation:
+  manual_download:
+    required: true
+    url: https://www.orcasoftware.de/download.html
+    license_type: free-academic
+    instructions:
+      - "Go to https://www.orcasoftware.de/ and click 'Download'"
+      - "Register for a free academic account (requires institutional email)"
+      - "After registration, log in and go to Downloads"
+      - "Select 'ORCA 6.0.1' (or latest) and 'Linux x86-64 shared'"
+      - "Download the tar.xz archive (e.g., orca_6_0_1_linux_x86-64_shared_openmpi416.tar.xz)"
+      - "Transfer to Polaris using: configdiscovery transfer configs/polaris/orca.yaml --web"
+      - "SSH to Polaris and extract: tar xf orca_6_0_1_linux_x86-64_shared_openmpi416.tar.xz"
+      - "Move to install location: mv orca_6_0_1_linux_x86-64_shared_openmpi416 ~/software/orca"
+      - "Verify: ~/software/orca/orca --version"
+    expected_path: ~/software/orca/orca
+    verification: ~/software/orca/orca --version
+    globus_transfer:
+      destination_endpoint: 05d2c76a-e867-4f67-aa57-76edeb0beda0
+      destination_path: ~/
+      source_filename: "orca_6_0_1*.tar.xz"
+  steps:
+    - mkdir -p ~/software/orca
+  verification: test -x ~/software/orca/orca && ~/software/orca/orca --version
+execution:
+  function: "def run_orca(input_file=\"test.inp\", output_file=None, nproc=8, memory_mb=4000):\n\
+    \    \"\"\"\n    Run ORCA quantum chemistry calculation\n    \n    Parameters:\n\
+    \    - input_file: ORCA input file (.inp)\n    - output_file: Output file name\
+    \ (default: input_file with .out extension)\n    - nproc: Number of processors\
+    \ to use\n    - memory_mb: Memory per core in MB\n    \n    Returns:\n    - Dictionary\
+    \ with output file path and calculation status\n    \"\"\"\n    import subprocess\n\
+    \    import os\n    import tempfile\n    \n    # Set ORCA environment\n    orca_root\
+    \ = os.path.expanduser(\"~/software/orca\")\n    orca_exe = os.path.join(orca_root, \"\
+    orca\")\n    \n    # Check if ORCA is installed\n    if not os.path.exists(orca_exe):\n\
+    \        raise FileNotFoundError(f\"ORCA not found at {orca_exe}. Please install\
+    \ ORCA first.\")\n    \n    # Set up environment\n    env = os.environ.copy()\n\
+    \    env[\"ORCA_ROOT\"] = orca_root\n    env[\"PATH\"] = f\"{orca_root}:{env.get('PATH',\
+    \ '')}\"\n    env[\"LD_LIBRARY_PATH\"] = f\"{orca_root}:{env.get('LD_LIBRARY_PATH',\
+    \ '')}\"\n    env[\"OMP_NUM_THREADS\"] = \"1\"\n    \n    # If input_file is just\
+    \ content, write it to a temporary file\n    if not os.path.exists(input_file):\n\
+    \        if \"\\n\" in input_file or any(keyword in input_file.upper() for keyword\
+    \ in [\"!\", \"%PAL\", \"B3LYP\", \"HF\", \"DFT\"]):\n            # This looks\
+    \ like ORCA input content, not a filename\n            temp_dir = tempfile.mkdtemp()\n\
+    \            temp_input = os.path.join(temp_dir, \"input.inp\")\n            \n\
+    \            # Add default parallel settings if not specified\n            input_content\
+    \ = input_file\n            if \"%pal\" not in input_content.lower():\n      \
+    \          input_content = f\"%pal nprocs {nproc} end\\n%maxcore {memory_mb}\\\
+    n\\n\" + input_content\n            \n            with open(temp_input, 'w') as\
+    \ f:\n                f.write(input_content)\n            input_file = temp_input\n\
+    \    \n    # Determine output file\n    if output_file is None:\n        base_name\
+    \ = os.path.splitext(input_file)[0]\n        output_file = f\"{base_name}.out\"\
+    \n    \n    # Get the directory and base name for working directory\n    input_dir\
+    \ = os.path.dirname(os.path.abspath(input_file))\n    input_basename = os.path.splitext(os.path.basename(input_file))[0]\n\
+    \    \n    # Change to input directory for calculation\n    original_dir = os.getcwd()\n\
+    \    os.chdir(input_dir)\n    \n    try:\n        # Run ORCA calculation\n   \
+    \     cmd = [orca_exe, os.path.basename(input_file)]\n        \n        print(f\"\
+    Running ORCA with command: {' '.join(cmd)}\")\n        print(f\"Working directory:\
+    \ {input_dir}\")\n        print(f\"Using {nproc} processors, {memory_mb}MB memory\
+    \ per core\")\n        \n        # Run the calculation\n        with open(output_file,\
+    \ 'w') as outf:\n            result = subprocess.run(\n                cmd,\n\
+    \                stdout=outf,\n                stderr=subprocess.STDOUT,\n   \
+    \             env=env,\n                check=True,\n                executable='/bin/bash'\n\
+    \            )\n        \n        # Check if calculation completed successfully\n\
+    \        success = False\n        final_energy = None\n        \n        if os.path.exists(output_file):\n\
+    \            with open(output_file, 'r') as f:\n                content = f.read()\n\
+    \                if \"ORCA TERMINATED NORMALLY\" in content:\n               \
+    \     success = True\n                # Try to extract final energy\n        \
+    \        for line in content.split('\\n'):\n                    if \"FINAL SINGLE\
+    \ POINT ENERGY\" in line:\n                        try:\n                    \
+    \        final_energy = float(line.split()[-1])\n                        except\
+    \ (ValueError, IndexError):\n                            pass\n        \n    \
+    \    # Collect output files\n        output_files = []\n        for ext in ['.out',\
+    \ '.gbw', '.xyz', '.trj', '.hess', '.prop']:\n            output_path = f\"{input_basename}{ext}\"\
+    \n            if os.path.exists(output_path):\n                output_files.append(os.path.abspath(output_path))\n\
+    \        \n        result_dict = {\n            \"status\": \"completed\" if success\
+    \ else \"failed\",\n            \"output_file\": os.path.abspath(output_file),\n\
+    \            \"output_files\": output_files,\n            \"final_energy\": final_energy,\n\
+    \            \"working_directory\": input_dir\n        }\n        \n        if\
+    \ not success:\n            result_dict[\"error\"] = \"ORCA calculation did not\
+    \ terminate normally\"\n        \n        return result_dict\n        \n    except\
+    \ subprocess.CalledProcessError as e:\n        return {\n            \"status\"\
+    : \"failed\",\n            \"error\": f\"ORCA execution failed with return code\
+    \ {e.returncode}\",\n            \"output_file\": os.path.abspath(output_file)\
+    \ if os.path.exists(output_file) else None,\n            \"working_directory\"\
+    : input_dir\n        }\n    \n    except Exception as e:\n        return {\n \
+    \           \"status\": \"error\",\n            \"error\": str(e),\n         \
+    \   \"working_directory\": input_dir\n        }\n    \n    finally:\n        os.chdir(original_dir)"
+  function_name: run_orca
+  resources:
+    nodes: 1
+    cores_per_node: 64
+    memory_gb: 256
+    walltime: 02:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://www.orcasoftware.de/tutorials_orca/
+  - https://www.orcasoftware.de/tutorials_orca/
+  attempts: 34
+  notes: 'ORCA documentation requires login access. ORCA is an ab initio, DFT and
+    semiempirical SCF-MO package. Need to check if it''s available on the system or
+    needs installation.
+
+    ORCA is not pre-installed on Polaris and no ORCA modules are available. Need to
+    install ORCA from scratch. ORCA requires registration for academic use.
+
+    ORCA is not available through conda-forge. Found various quantum computing packages
+    but not the ORCA quantum chemistry software. Will need to provide manual installation
+    instructions since ORCA requires registration from orcasoftware.de.
+
+    System has GCC 14.3.0, basic BLAS/LAPACK libraries, and Cray MPI available. Created
+    installation directory structure. ORCA installation will require manual download
+    from orcasoftware.de after registration.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

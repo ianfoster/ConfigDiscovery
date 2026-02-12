@@ -1,0 +1,87 @@
+name: mdanalysis
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  pip_packages:
+    - MDAnalysis
+  env_vars: {}
+installation:
+  steps:
+    - pip install MDAnalysis
+  verification: |
+    python -c "import MDAnalysis; print(f'MDAnalysis {MDAnalysis.__version__}')"
+execution:
+  function: |
+    def run_mdanalysis(trajectory_frames=None, reference_frame=None):
+        """
+        Analyze MD trajectory.
+
+        Args:
+            trajectory_frames: List of XYZ coordinate arrays (n_frames x n_atoms x 3)
+            reference_frame: Reference coordinates for RMSD (n_atoms x 3)
+
+        Returns:
+            dict with RMSD, RMSF, radius of gyration
+        """
+        import numpy as np
+
+        if trajectory_frames is None:
+            # Demo with synthetic data
+            n_frames = 50
+            n_atoms = 10
+            trajectory_frames = []
+            base = np.random.randn(n_atoms, 3)
+            for i in range(n_frames):
+                frame = base + np.random.randn(n_atoms, 3) * 0.1 * (i / n_frames + 1)
+                trajectory_frames.append(frame.tolist())
+            reference_frame = base.tolist()
+
+        trajectory = np.array(trajectory_frames)
+        reference = np.array(reference_frame) if reference_frame else trajectory[0]
+
+        n_frames, n_atoms, _ = trajectory.shape
+
+        # RMSD calculation
+        rmsd_values = []
+        for frame in trajectory:
+            diff = frame - reference
+            rmsd = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
+            rmsd_values.append(float(rmsd))
+
+        # RMSF per atom
+        mean_positions = trajectory.mean(axis=0)
+        rmsf = np.sqrt(np.mean(np.sum((trajectory - mean_positions)**2, axis=2), axis=0))
+
+        # Radius of gyration
+        rog_values = []
+        for frame in trajectory:
+            center = frame.mean(axis=0)
+            rog = np.sqrt(np.mean(np.sum((frame - center)**2, axis=1)))
+            rog_values.append(float(rog))
+
+        return {
+            "status": "completed",
+            "n_frames": n_frames,
+            "n_atoms": n_atoms,
+            "rmsd": rmsd_values,
+            "rmsd_mean": float(np.mean(rmsd_values)),
+            "rmsd_max": float(np.max(rmsd_values)),
+            "rmsf": rmsf.tolist(),
+            "rmsf_mean": float(np.mean(rmsf)),
+            "radius_of_gyration": rog_values,
+            "rog_mean": float(np.mean(rog_values))
+        }
+  function_name: run_mdanalysis
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+    walltime: 00:30:00
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'MDAnalysis for trajectory analysis on Aurora.'
+tags: []

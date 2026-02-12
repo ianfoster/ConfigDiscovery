@@ -1,0 +1,97 @@
+name: gpaw
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules:
+  - conda/2025-09-25
+  - cray-mpich/9.0.1
+  conda_packages: []
+  pip_packages:
+  - gpaw
+  env_vars:
+    MPICH_GPU_SUPPORT_ENABLED: '0'
+    OMP_NUM_THREADS: '1'
+  setup_commands: []
+installation:
+  steps: []
+  verification: |
+    export MPICH_GPU_SUPPORT_ENABLED=0 && \
+    /soft/applications/conda/2025-09-25/mconda3/bin/python -c "import gpaw; from ase import Atoms; from gpaw import GPAW; atoms = Atoms('H2', positions=[(0, 0, 0), (0, 0, 0.74)]); atoms.center(vacuum=5.0); calc = GPAW(mode='lcao', basis='dzp', h=0.2, xc='PBE'); atoms.set_calculator(calc); energy = atoms.get_potential_energy(); print(f'H2 energy: {energy:.3f} eV')"
+execution:
+  function: "def run_gpaw(system=\"H2\", basis=\"dzp\", xc=\"PBE\", h=0.2, output_dir=\"\
+    gpaw_output\"):\n    \"\"\"\n    Run GPAW single-point calculation via subprocess\
+    \ with proper environment.\n    \n    Parameters:\n    - system: 'H2', 'H2O',\
+    \ 'CO2', 'NH3', or 'CH4'\n    - basis: basis set ('dzp', 'sz', etc.)\n    - xc:\
+    \ exchange-correlation functional ('PBE', 'LDA')\n    - h: grid spacing in Angstrom\n\
+    \    - output_dir: directory for output files\n    \n    Returns:\n    - Dictionary\
+    \ with results including energy\n    \"\"\"\n    import subprocess\n    import\
+    \ os\n    import json\n\n    output_dir = os.path.abspath(output_dir)\n    os.makedirs(output_dir,\
+    \ exist_ok=True)\n\n    # Python script to run GPAW calculation\n    script_content\
+    \ = f'''import os\nos.environ[\"MPICH_GPU_SUPPORT_ENABLED\"] = \"0\"\nos.environ[\"\
+    OMP_NUM_THREADS\"] = \"1\"\n\nimport json\nfrom ase import Atoms\nfrom gpaw import\
+    \ GPAW\nimport numpy as np\n\n# Predefined molecular systems\nsystems = {{\n \
+    \   \"H2\": Atoms(\"H2\", positions=[(0, 0, 0), (0, 0, 0.74)]),\n    \"H2O\": Atoms(\"\
+    H2O\", positions=[(0, 0, 0), (0.757, 0.587, 0), (0, 0.757, 0.587)]),\n    \"CO2\"\
+    : Atoms(\"CO2\", positions=[(0, 0, 0), (1.16, 0, 0), (-1.16, 0, 0)]),\n    \"NH3\"\
+    : Atoms(\"NH3\", positions=[(0, 0, 0), (0.94, 0, 0.39), (-0.47, 0.81, 0.39), (-0.47,\
+    \ -0.81, 0.39)]),\n    \"CH4\": Atoms(\"CH4\", positions=[(0, 0, 0), (0.63, 0.63,\
+    \ 0.63), (-0.63, -0.63, 0.63), (-0.63, 0.63, -0.63), (0.63, -0.63, -0.63)])\n}}\n\
+    \nsystem = \"{system}\"\natoms = systems[system].copy()\natoms.center(vacuum=5.0)\n\
+    \ncalc = GPAW(mode=\"lcao\", basis=\"{basis}\", h={h}, xc=\"{xc}\")\natoms.set_calculator(calc)\n\
+    \nenergy = atoms.get_potential_energy()\nforces = atoms.get_forces()\n\nprint(f\"\
+    System: {{system}}\")\nprint(f\"Energy: {{energy:.6f}} eV\")\nprint(f\"Max force:\
+    \ {{np.max(np.abs(forces)):.6f}} eV/Ang\")\n\nresults = {{\n    \"status\": \"\
+    completed\",\n    \"system\": system,\n    \"energy_eV\": float(energy),\n   \
+    \ \"max_force_eV_Ang\": float(np.max(np.abs(forces))),\n    \"basis\": \"{basis}\"\
+    ,\n    \"xc\": \"{xc}\"\n}}\n\nwith open(\"{output_dir}/results.json\", \"w\")\
+    \ as f:\n    json.dump(results, f)\n\nprint(\"Calculation completed successfully!\"\
+    )\n'''\n\n    script_file = os.path.join(output_dir, \"gpaw_calc.py\")\n    with\
+    \ open(script_file, \"w\") as f:\n        f.write(script_content)\n\n    # Run\
+    \ with proper environment\n    cmd = f\"export MPICH_GPU_SUPPORT_ENABLED=0 &&\
+    \ /soft/applications/conda/2025-09-25/mconda3/bin/python {script_file}\"\n\n \
+    \   try:\n        result = subprocess.run(\n            cmd,\n            shell=True,\n\
+    \            capture_output=True,\n            text=True,\n            timeout=600\n\
+    \        )\n\n        # Try to load results\n        results_file = os.path.join(output_dir,\
+    \ \"results.json\")\n        if os.path.exists(results_file):\n            with\
+    \ open(results_file) as f:\n                results = json.load(f)\n        else:\n\
+    \            results = {\"status\": \"completed\" if result.returncode == 0 else\
+    \ \"failed\"}\n\n        results[\"stdout\"] = result.stdout\n        results[\"\
+    stderr\"] = result.stderr\n        results[\"returncode\"] = result.returncode\n\
+    \n        if result.returncode != 0:\n            results[\"status\"] = \"failed\"\
+    \n            results[\"error\"] = result.stderr or f\"Exit code: {result.returncode}\"\
+    \n\n        return results\n\n    except subprocess.TimeoutExpired:\n        return\
+    \ {\"status\": \"failed\", \"error\": \"Calculation timeout exceeded\"}\n    except\
+    \ Exception as e:\n        return {\"status\": \"failed\", \"error\": str(e)}"
+  function_name: run_gpaw
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+    walltime: 01:00:00
+    queue: debug
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://wiki.fysik.dtu.dk/gpaw/install.html
+  - https://wiki.fysik.dtu.dk/gpaw/install.html
+  attempts: 32
+  notes: 'GPAW 25.7.0 successfully installed via pip. Basic Python import works. However,
+    ''gpaw info'' command fails with MPICH error related to GPU support. Need to test
+    basic functionality without MPI first.
+
+    Successfully ran GPAW calculation with environment variable MPICH_GPU_SUPPORT_ENABLED=0
+    to disable GPU support. Serial H2 calculation completed in ~3 seconds with correct
+    energy (-6.447 eV). Need to test parallel capabilities.
+
+    Parallel execution works! Successfully ran GPAW with mpirun -np 2, showing proper
+    domain decomposition and faster execution (1.87s vs 3.23s). Both serial and parallel
+    modes functional.
+
+    Successfully completed H2O geometry optimization test. Initial energy: -11.338
+    eV, final energy: -13.018 eV, improvement of 1.68 eV. Optimization converged in
+    7 steps. Full functionality confirmed including forces, geometry optimization,
+    and complex molecular systems.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

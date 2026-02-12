@@ -1,0 +1,126 @@
+name: cp2k
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+environment:
+  modules: []
+  conda_env: cp2k_env
+  conda_packages:
+    - cp2k=2024.2
+  env_vars:
+    OMP_NUM_THREADS: '4'
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate cp2k_env
+installation:
+  steps:
+    - conda create -n cp2k_env -c conda-forge cp2k=2024.2 python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && \
+    conda activate cp2k_env && cp2k.ssmp --version
+execution:
+  function: |
+    def run_cp2k(input_file=None, output_dir="cp2k_output"):
+        """
+        Run CP2K calculation.
+
+        Args:
+            input_file: CP2K input file content or path
+            output_dir: Directory for output files
+
+        Returns:
+            dict with calculation results
+        """
+        import subprocess
+        import os
+        import tempfile
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Default test: H2 energy calculation
+        if input_file is None:
+            input_file = """
+&GLOBAL
+  PROJECT H2
+  RUN_TYPE ENERGY
+  PRINT_LEVEL LOW
+&END GLOBAL
+
+&FORCE_EVAL
+  METHOD Quickstep
+  &DFT
+    BASIS_SET_FILE_NAME BASIS_SET
+    POTENTIAL_FILE_NAME POTENTIAL
+    &QS
+      EPS_DEFAULT 1.0E-10
+    &END QS
+    &MGRID
+      CUTOFF 200
+    &END MGRID
+    &XC
+      &XC_FUNCTIONAL PBE
+      &END XC_FUNCTIONAL
+    &END XC
+    &SCF
+      MAX_SCF 50
+      EPS_SCF 1.0E-6
+    &END SCF
+  &END DFT
+  &SUBSYS
+    &CELL
+      ABC 10.0 10.0 10.0
+    &END CELL
+    &COORD
+      H 0.0 0.0 0.0
+      H 0.0 0.0 0.74
+    &END COORD
+    &KIND H
+      BASIS_SET DZVP-GTH
+      POTENTIAL GTH-PBE-q1
+    &END KIND
+  &END SUBSYS
+&END FORCE_EVAL
+"""
+
+        # Write input file
+        input_path = os.path.join(output_dir, "input.inp")
+        with open(input_path, "w") as f:
+            f.write(input_file)
+
+        # Run CP2K
+        conda_activate = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate cp2k_env && "
+        cmd = f"{conda_activate}cp2k.ssmp -i {input_path}"
+
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            cwd=output_dir, timeout=600
+        )
+
+        output = result.stdout + result.stderr
+
+        # Parse energy
+        energy = None
+        for line in output.split("\n"):
+            if "ENERGY| Total FORCE_EVAL" in line:
+                try:
+                    energy = float(line.split()[-1])
+                except:
+                    pass
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "energy_hartree": energy,
+            "output_dir": output_dir,
+            "stdout": output[-2000:] if len(output) > 2000 else output
+        }
+  function_name: run_cp2k
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 64
+    walltime: 02:00:00
+discovery_log:
+  discovered_date: '2026-02-11'
+  attempts: 1
+  notes: 'CP2K 2024.2 on Aurora via conda-forge.'
+tags: [dft, periodic, materials]

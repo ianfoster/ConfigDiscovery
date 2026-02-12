@@ -1,0 +1,191 @@
+name: ambertools
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  modules: []
+  conda_env: ambertools
+  conda_packages:
+  - ambertools=24.8
+  - python=3.10
+  pip_packages: []
+  env_vars: {}
+  setup_commands: []
+installation:
+  steps: []
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate ambertools && \
+    cpptraj --version && antechamber -L && python -c 'import pytraj, parmed; print("AmberTools Python interfaces working")'
+execution:
+  function: "def run_ambertools(task_type=\"md_simulation\", \n                  \
+    \ input_structure=None, \n                   topology_file=None,\n           \
+    \        coordinate_file=None,\n                   output_dir=\"amber_output\"\
+    ,\n                   simulation_steps=1000000,\n                   timestep=0.002,\n\
+    \                   temperature=300.0,\n                   pressure=1.0,\n   \
+    \                force_field=\"leaprc.protein.ff19SB\",\n                   water_model=\"\
+    leaprc.water.tip3p\",\n                   ion_concentration=0.15,\n          \
+    \         minimize_steps=5000,\n                   heat_steps=50000,\n       \
+    \            equilibration_steps=100000,\n                   trajectory_save_freq=1000,\n\
+    \                   restart_save_freq=5000,\n                   cpus=64):\n  \
+    \  \"\"\"\n    Run AmberTools workflows for molecular dynamics simulations and\
+    \ analysis.\n    \n    Parameters:\n    - task_type: Type of task to perform\n\
+    \      * \"md_simulation\": Complete MD workflow (prep + minimize + heat + equilibrate\
+    \ + production)\n      * \"prepare_system\": Only prepare system (tleap)\n   \
+    \   * \"minimize\": Energy minimization only\n      * \"md_production\": Production\
+    \ MD only (requires existing topology/coordinates)\n      * \"analyze_trajectory\"\
+    : Trajectory analysis using cpptraj\n      * \"parametrize_molecule\": Parametrize\
+    \ small molecule using antechamber\n    - input_structure: Input PDB file for\
+    \ system preparation\n    - topology_file: Amber topology file (.prmtop) for simulation\n\
+    \    - coordinate_file: Amber coordinate file (.inpcrd or .rst7) for simulation\
+    \  \n    - output_dir: Directory for output files\n    - simulation_steps: Number\
+    \ of production MD steps\n    - timestep: MD timestep in ps (default 0.002 ps\
+    \ = 2 fs)\n    - temperature: Target temperature in K\n    - pressure: Target\
+    \ pressure in bar\n    - force_field: Force field parameter file\n    - water_model:\
+    \ Water model parameter file\n    - ion_concentration: Ion concentration in M\n\
+    \    - minimize_steps: Number of minimization steps\n    - heat_steps: Number\
+    \ of heating steps\n    - equilibration_steps: Number of equilibration steps\n\
+    \    - trajectory_save_freq: Frequency to save trajectory frames\n    - restart_save_freq:\
+    \ Frequency to save restart files\n    - cpus: Number of CPU cores to use\n  \
+    \  \"\"\"\n    import subprocess\n    import os\n    import tempfile\n    import\
+    \ shutil\n    \n    # Create output directory\n    os.makedirs(output_dir, exist_ok=True)\n\
+    \    os.chdir(output_dir)\n    \n    results = {\"task_type\": task_type, \"output_dir\"\
+    : os.path.abspath(output_dir)}\n    \n    if task_type == \"parametrize_molecule\"\
+    :\n        if not input_structure:\n            raise ValueError(\"input_structure\
+    \ required for molecule parametrization\")\n            \n        # Use antechamber\
+    \ to parametrize small molecule\n        mol_name = os.path.splitext(os.path.basename(input_structure))[0]\n\
+    \        \n        # Generate GAFF parameters\n        subprocess.run([\n    \
+    \        \"antechamber\", \"-i\", input_structure, \"-fi\", \"pdb\",\n       \
+    \     \"-o\", f\"{mol_name}.mol2\", \"-fo\", \"mol2\",\n            \"-c\", \"\
+    bcc\", \"-at\", \"gaff2\", \"-nc\", \"0\"\n        ], check=True)\n        \n\
+    \        # Generate frcmod file\n        subprocess.run([\n            \"parmchk2\"\
+    , \"-i\", f\"{mol_name}.mol2\", \"-f\", \"mol2\",\n            \"-o\", f\"{mol_name}.frcmod\"\
+    \n        ], check=True)\n        \n        results.update({\n            \"mol2_file\"\
+    : f\"{mol_name}.mol2\",\n            \"frcmod_file\": f\"{mol_name}.frcmod\"\n\
+    \        })\n        \n    elif task_type == \"prepare_system\":\n        if not\
+    \ input_structure:\n            raise ValueError(\"input_structure required for\
+    \ system preparation\")\n            \n        system_name = os.path.splitext(os.path.basename(input_structure))[0]\n\
+    \        \n        # Create tleap input script\n        tleap_script = f\"\"\"\
+    \nsource {force_field}\nsource {water_model}\nsource leaprc.gaff2\n\n# Load protein\n\
+    mol = loadpdb {input_structure}\n\n# Solvate system\nsolvateoct mol TIP3PBOX 10.0\n\
+    \n# Add ions to neutralize and set concentration\naddions mol Na+ 0\naddions mol\
+    \ Cl- 0\naddionsrand mol Na+ {int(ion_concentration * 100)} Cl- {int(ion_concentration\
+    \ * 100)}\n\n# Save topology and coordinates\nsaveamberparm mol {system_name}.prmtop\
+    \ {system_name}.inpcrd\nquit\n\"\"\"\n        \n        with open(\"tleap.in\"\
+    , \"w\") as f:\n            f.write(tleap_script)\n            \n        # Run\
+    \ tleap\n        subprocess.run([\"tleap\", \"-f\", \"tleap.in\"], check=True)\n\
+    \        \n        results.update({\n            \"topology_file\": f\"{system_name}.prmtop\"\
+    ,\n            \"coordinate_file\": f\"{system_name}.inpcrd\"\n        })\n  \
+    \      \n        topology_file = f\"{system_name}.prmtop\"\n        coordinate_file\
+    \ = f\"{system_name}.inpcrd\"\n    \n    if task_type in [\"md_simulation\", \"\
+    minimize\"] and (topology_file and coordinate_file):\n        \n        # Minimization\n\
+    \        min_input = f\"\"\"\nMinimization\n &cntrl\n  imin=1, maxcyc={minimize_steps},\
+    \ ncyc={minimize_steps//2},\n  cut=9.0, ntb=1, ntpr=100, ntwx=0,\n &end\n\"\"\"\
+    \n        with open(\"minimize.in\", \"w\") as f:\n            f.write(min_input)\n\
+    \            \n        subprocess.run([\n            \"sander\", \"-O\", \"-i\"\
+    , \"minimize.in\", \"-o\", \"minimize.out\",\n            \"-p\", topology_file,\
+    \ \"-c\", coordinate_file, \"-r\", \"minimize.rst7\"\n        ], check=True)\n\
+    \        \n        results[\"minimize_output\"] = \"minimize.out\"\n        results[\"\
+    minimized_coords\"] = \"minimize.rst7\"\n        \n        if task_type == \"\
+    minimize\":\n            return results\n            \n        # Heating\n   \
+    \     heat_input = f\"\"\"\nHeating\n &cntrl\n  imin=0, irest=0, ntx=1,\n  nstlim={heat_steps},\
+    \ dt={timestep},\n  ntc=2, ntf=2, cut=9.0, ntb=1,\n  ntt=3, gamma_ln=2.0, tempi=0.0,\
+    \ temp0={temperature},\n  ntpr=1000, ntwx=1000, ntwr=5000,\n  nmropt=1,\n &end\n\
+    \ &wt TYPE='TEMP', istep1=0, istep2={heat_steps//2}, value1=0.0, value2={temperature},\
+    \ &end\n &wt TYPE='TEMP', istep1={heat_steps//2+1}, istep2={heat_steps}, value1={temperature},\
+    \ value2={temperature}, &end\n &wt TYPE='END' &end\n\"\"\"\n        with open(\"\
+    heat.in\", \"w\") as f:\n            f.write(heat_input)\n            \n     \
+    \   subprocess.run([\n            \"sander\", \"-O\", \"-i\", \"heat.in\", \"\
+    -o\", \"heat.out\",\n            \"-p\", topology_file, \"-c\", \"minimize.rst7\"\
+    , \"-r\", \"heat.rst7\",\n            \"-x\", \"heat.nc\"\n        ], check=True)\n\
+    \        \n        results[\"heat_output\"] = \"heat.out\"\n        results[\"\
+    heated_coords\"] = \"heat.rst7\"\n        results[\"heat_trajectory\"] = \"heat.nc\"\
+    \n        \n        # Equilibration\n        equil_input = f\"\"\"\nEquilibration\n\
+    \ &cntrl\n  imin=0, irest=1, ntx=5,\n  nstlim={equilibration_steps}, dt={timestep},\n\
+    \  ntc=2, ntf=2, cut=9.0, ntb=2, ntp=1, taup=1.0,\n  ntt=3, gamma_ln=2.0, temp0={temperature},\n\
+    \  ntpr=1000, ntwx=1000, ntwr=5000,\n &end\n\"\"\"\n        with open(\"equilibration.in\"\
+    , \"w\") as f:\n            f.write(equil_input)\n            \n        subprocess.run([\n\
+    \            \"sander\", \"-O\", \"-i\", \"equilibration.in\", \"-o\", \"equilibration.out\"\
+    ,\n            \"-p\", topology_file, \"-c\", \"heat.rst7\", \"-r\", \"equilibration.rst7\"\
+    ,\n            \"-x\", \"equilibration.nc\"\n        ], check=True)\n        \n\
+    \        results[\"equilibration_output\"] = \"equilibration.out\"\n        results[\"\
+    equilibrated_coords\"] = \"equilibration.rst7\"\n        results[\"equilibration_trajectory\"\
+    ] = \"equilibration.nc\"\n        \n        coordinate_file = \"equilibration.rst7\"\
+    \n    \n    if task_type in [\"md_simulation\", \"md_production\"] and (topology_file\
+    \ and coordinate_file):\n        \n        # Production MD\n        prod_input\
+    \ = f\"\"\"\nProduction MD\n &cntrl\n  imin=0, irest=1, ntx=5,\n  nstlim={simulation_steps},\
+    \ dt={timestep},\n  ntc=2, ntf=2, cut=9.0, ntb=2, ntp=1, taup=1.0,\n  ntt=3, gamma_ln=2.0,\
+    \ temp0={temperature},\n  ntpr={trajectory_save_freq}, ntwx={trajectory_save_freq},\
+    \ \n  ntwr={restart_save_freq}, ntwv=0, ioutfm=1,\n &end\n\"\"\"\n        with\
+    \ open(\"production.in\", \"w\") as f:\n            f.write(prod_input)\n    \
+    \        \n        # Use multiple cores if available\n        if cpus > 1:\n \
+    \           subprocess.run([\n                \"mpirun\", \"-np\", str(cpus),\
+    \ \"sander.MPI\", \"-O\", \n                \"-i\", \"production.in\", \"-o\"\
+    , \"production.out\",\n                \"-p\", topology_file, \"-c\", coordinate_file,\
+    \ \n                \"-r\", \"production.rst7\", \"-x\", \"production.nc\"\n \
+    \           ], check=True)\n        else:\n            subprocess.run([\n    \
+    \            \"sander\", \"-O\", \"-i\", \"production.in\", \"-o\", \"production.out\"\
+    ,\n                \"-p\", topology_file, \"-c\", coordinate_file, \n        \
+    \        \"-r\", \"production.rst7\", \"-x\", \"production.nc\"\n            ],\
+    \ check=True)\n        \n        results[\"production_output\"] = \"production.out\"\
+    \n        results[\"final_coords\"] = \"production.rst7\"\n        results[\"\
+    production_trajectory\"] = \"production.nc\"\n        \n        # Basic analysis\n\
+    \        cpptraj_input = f\"\"\"\nparm {topology_file}\ntrajin production.nc\n\
+    rmsd :1-999 first mass out rmsd.dat\nrms2d :1-999 first mass out rms2d.gnu\nautoimage\n\
+    center :1-999\nimage center\ntrajout production_centered.nc netcdf\nrun\nquit\n\
+    \"\"\"\n        with open(\"analysis.ptraj\", \"w\") as f:\n            f.write(cpptraj_input)\n\
+    \            \n        subprocess.run([\"cpptraj\", \"-i\", \"analysis.ptraj\"\
+    ], check=True)\n        \n        results[\"rmsd_analysis\"] = \"rmsd.dat\"\n\
+    \        results[\"centered_trajectory\"] = \"production_centered.nc\"\n    \n\
+    \    elif task_type == \"analyze_trajectory\":\n        if not (topology_file\
+    \ and coordinate_file):\n            raise ValueError(\"topology_file and coordinate_file\
+    \ required for trajectory analysis\")\n            \n        # Advanced trajectory\
+    \ analysis\n        cpptraj_input = f\"\"\"\nparm {topology_file}\ntrajin {coordinate_file}\n\
+    \n# Basic structural analysis\nrmsd :1-999 first mass out rmsd.dat\nrms2d :1-999\
+    \ first mass out rms2d.gnu\nradgyr :1-999 out radius_of_gyration.dat\ndistance\
+    \ :1@CA :100@CA out distance.dat\n\n# Secondary structure analysis (if applicable)\n\
+    secstruct :1-999 out secondary_structure.dat\n\n# Hydrogen bond analysis\nhbond\
+    \ :1-999 out hbonds.dat\n\n# Center and image\nautoimage\ncenter :1-999\nimage\
+    \ center\n\n# Output processed trajectory\ntrajout analyzed_trajectory.nc netcdf\n\
+    run\nquit\n\"\"\"\n        with open(\"detailed_analysis.ptraj\", \"w\") as f:\n\
+    \            f.write(cpptraj_input)\n            \n        subprocess.run([\"\
+    cpptraj\", \"-i\", \"detailed_analysis.ptraj\"], check=True)\n        \n     \
+    \   results.update({\n            \"rmsd_analysis\": \"rmsd.dat\",\n         \
+    \   \"radius_of_gyration\": \"radius_of_gyration.dat\",\n            \"distance_analysis\"\
+    : \"distance.dat\",\n            \"secondary_structure\": \"secondary_structure.dat\"\
+    ,\n            \"hydrogen_bonds\": \"hbonds.dat\",\n            \"processed_trajectory\"\
+    : \"analyzed_trajectory.nc\"\n        })\n    \n    # Calculate simulation time\
+    \ if MD was run\n    if \"production_output\" in results:\n        total_time_ns\
+    \ = simulation_steps * timestep / 1000.0\n        results[\"simulation_time_ns\"\
+    ] = total_time_ns\n        \n    results[\"status\"] = \"completed\"\n    return\
+    \ results"
+  function_name: run_ambertools
+  resources:
+    nodes: 1
+    cores_per_node: 64
+    memory_gb: 256
+    walltime: 04:00:00
+    queue: workq
+  pre_commands: []
+  post_commands: []
+discovery_log:
+  discovered_date: '2026-02-10'
+  docs_consulted:
+  - https://ambermd.org/AmberTools.php
+  - https://ambermd.org/AmberTools.php
+  attempts: 27
+  notes: 'The module command is not available in the PATH. Based on the probe_environment
+    output, available_tools shows module: False. This indicates that Lmod modules
+    may not be directly accessible or need to be sourced differently.
+
+    AmberTools is not available as a pre-installed module on Polaris. Need to install
+    it manually, likely using conda since that''s available.
+
+    AmberTools is available via conda-forge with many versions available, including
+    the latest 24.8. There are builds with different MPI configurations (mpich, openmpi,
+    nompi) and with/without CUDA support.
+
+    AmberTools 24.8 successfully installed via conda and tested. All major tools working:
+    antechamber, tleap, sander, cpptraj, pytraj (2.0.6), and parmed (4.3.1). Python
+    interfaces are also functional.'
+  claude_model: claude-sonnet-4-20250514
+tags: []

@@ -404,6 +404,235 @@ def show(config_path: str):
 @main.command()
 @click.argument("config_path", type=click.Path(exists=True))
 @click.option(
+    "--force",
+    is_flag=True,
+    help="Force reinstall even if already installed",
+)
+@click.option(
+    "--check-download",
+    is_flag=True,
+    help="Only check if manual download is complete, don't install",
+)
+def install(config_path: str, force: bool, check_download: bool):
+    """Install dependencies for a configuration on the remote system.
+
+    This ensures all pip packages, conda packages, and conda environments
+    are set up before running the software.
+
+    For software requiring manual download (e.g., NAMD, ORCA), this command
+    will first check if the download is complete and provide instructions
+    if not.
+
+    Example:
+        configdiscovery install configs/polaris/pyscf.yaml
+        configdiscovery install configs/polaris/namd.yaml --check-download
+    """
+    config = HPCConfig.from_yaml_file(config_path)
+
+    console.print(f"[bold]Installing dependencies for {config.name} on {config.hpc_system}[/bold]")
+    console.print(f"Endpoint: {config.endpoint_id}")
+
+    from .discovery import ConfigRunner
+    runner = ConfigRunner(config)
+
+    # Check for manual download requirements
+    manual_dl = config.installation.manual_download
+    if manual_dl and manual_dl.required:
+        console.print(f"\n[yellow]⚠ {config.name} requires manual download[/yellow]")
+
+        # Check if download is complete
+        download_complete = False
+        if manual_dl.expected_path:
+            try:
+                check_result = runner.compute.run_command(
+                    f"test -e {manual_dl.expected_path} && echo 'EXISTS' || echo 'MISSING'"
+                )
+                download_complete = "EXISTS" in check_result.get("output", "")
+            except Exception:
+                pass
+
+        if download_complete:
+            console.print(f"[green]✓ Download verified at {manual_dl.expected_path}[/green]")
+        else:
+            console.print(f"\n[bold]Download Instructions:[/bold]")
+            if manual_dl.license_type:
+                console.print(f"  License: {manual_dl.license_type}")
+            if manual_dl.url:
+                console.print(f"  URL: {manual_dl.url}")
+            console.print("")
+            for i, instruction in enumerate(manual_dl.instructions, 1):
+                console.print(f"  {i}. {instruction}")
+
+            if manual_dl.expected_path:
+                console.print(f"\n  Expected location: {manual_dl.expected_path}")
+
+            console.print(f"\n[yellow]After completing the download, run this command again.[/yellow]")
+
+            if check_download:
+                sys.exit(0)
+            else:
+                console.print(f"[red]✗ Cannot proceed without manual download[/red]")
+                sys.exit(1)
+
+        if check_download:
+            console.print("[green]Download check complete.[/green]")
+            sys.exit(0)
+
+    try:
+        result = runner.install_dependencies(force=force)
+        if result.get("success"):
+            console.print("[green]✓ Dependencies installed successfully[/green]")
+            if result.get("details"):
+                for detail in result["details"]:
+                    console.print(f"  - {detail}")
+        else:
+            console.print(f"[red]✗ Installation failed[/red]")
+            console.print(f"  Error: {result.get('error', 'Unknown error')}")
+            sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]✗ Installation failed: {e}[/red]")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("config_path", type=click.Path(exists=True))
+@click.argument("local_file", type=click.Path(exists=True), required=False)
+@click.option(
+    "--web",
+    is_flag=True,
+    help="Open Globus web app for transfer instead of CLI transfer",
+)
+@click.option(
+    "--source-endpoint", "-s",
+    help="Source Globus endpoint UUID (auto-detected if Globus Connect Personal is running)",
+)
+def transfer(config_path: str, local_file: str | None, web: bool, source_endpoint: str | None):
+    """Transfer downloaded software to the HPC system via Globus.
+
+    For software requiring manual download (NAMD, ORCA, etc.), use this
+    command to transfer the downloaded file to the HPC system.
+
+    Examples:
+        # Open Globus web app for transfer
+        configdiscovery transfer configs/polaris/namd.yaml --web
+
+        # Transfer a specific file (requires Globus Connect Personal)
+        configdiscovery transfer configs/polaris/namd.yaml ~/Downloads/NAMD_3.0.2.tar.gz
+    """
+    config = HPCConfig.from_yaml_file(config_path)
+
+    manual_dl = config.installation.manual_download
+    if not manual_dl or not manual_dl.required:
+        console.print(f"[yellow]{config.name} does not require manual download[/yellow]")
+        return
+
+    from .compute import get_transfer_client, HPC_TRANSFER_ENDPOINTS
+
+    # Determine destination endpoint
+    dest_endpoint = None
+    if manual_dl.globus_transfer and manual_dl.globus_transfer.destination_endpoint:
+        dest_endpoint = manual_dl.globus_transfer.destination_endpoint
+    elif config.hpc_system in HPC_TRANSFER_ENDPOINTS:
+        dest_endpoint = HPC_TRANSFER_ENDPOINTS[config.hpc_system]
+    else:
+        console.print(f"[red]No Globus endpoint configured for {config.hpc_system}[/red]")
+        console.print("Please specify a destination endpoint in the config or use scp.")
+        sys.exit(1)
+
+    # Determine destination path
+    dest_path = "~"
+    if manual_dl.globus_transfer and manual_dl.globus_transfer.destination_path:
+        dest_path = manual_dl.globus_transfer.destination_path
+    elif manual_dl.expected_path:
+        import os
+        dest_path = os.path.dirname(manual_dl.expected_path.replace("~", ""))
+        if not dest_path:
+            dest_path = "~"
+
+    try:
+        transfer_client = get_transfer_client(destination_endpoint=dest_endpoint)
+    except Exception as e:
+        console.print(f"[red]Failed to initialize Globus Transfer: {e}[/red]")
+        sys.exit(1)
+
+    if web or not local_file:
+        # Generate web URL
+        url = transfer_client.get_web_transfer_url(
+            source_endpoint=source_endpoint,
+            destination_path=dest_path,
+        )
+        console.print(f"\n[bold]Globus Web Transfer[/bold]")
+        console.print(f"\nOpen this URL to transfer files to {config.hpc_system}:")
+        console.print(f"[blue]{url}[/blue]\n")
+
+        if manual_dl.globus_transfer and manual_dl.globus_transfer.source_filename:
+            console.print(f"Expected filename pattern: {manual_dl.globus_transfer.source_filename}")
+        console.print(f"Destination path: {dest_path}")
+
+        if manual_dl.instructions:
+            console.print(f"\n[bold]After transfer, complete these steps on {config.hpc_system}:[/bold]")
+            # Show post-transfer instructions (skip download steps)
+            for i, instr in enumerate(manual_dl.instructions):
+                if "extract" in instr.lower() or "mv " in instr.lower() or "verify" in instr.lower():
+                    console.print(f"  - {instr}")
+    else:
+        # Direct transfer
+        console.print(f"[bold]Transferring {local_file} to {config.hpc_system}[/bold]")
+
+        # Try to get local endpoint
+        if not source_endpoint:
+            source_endpoint = transfer_client.get_local_endpoint()
+            if not source_endpoint:
+                console.print("[red]Could not detect local Globus endpoint.[/red]")
+                console.print("Please install Globus Connect Personal or specify --source-endpoint")
+                console.print("Or use --web to transfer via the Globus web app")
+                sys.exit(1)
+
+        import os
+        filename = os.path.basename(local_file)
+        source_path = os.path.abspath(local_file)
+        destination_full = f"{dest_path}/{filename}"
+
+        console.print(f"Source: {source_endpoint}:{source_path}")
+        console.print(f"Destination: {dest_endpoint}:{destination_full}")
+        console.print("\nStarting transfer...")
+
+        try:
+            result = transfer_client.transfer_file(
+                source_endpoint=source_endpoint,
+                source_path=source_path,
+                destination_path=destination_full,
+                label=f"ConfigDiscovery: {config.name}",
+                wait=True,
+                timeout=600,
+            )
+
+            if result["status"] == "completed":
+                console.print(f"[green]✓ Transfer completed![/green]")
+                if result.get("bytes_transferred"):
+                    mb = result["bytes_transferred"] / (1024 * 1024)
+                    console.print(f"  Transferred: {mb:.1f} MB")
+            else:
+                console.print(f"[red]✗ Transfer {result['status']}[/red]")
+                if result.get("error"):
+                    console.print(f"  Error: {result['error']}")
+                sys.exit(1)
+
+        except Exception as e:
+            console.print(f"[red]Transfer failed: {e}[/red]")
+            sys.exit(1)
+
+        # Show post-transfer instructions
+        if manual_dl.instructions:
+            console.print(f"\n[bold]Next steps on {config.hpc_system}:[/bold]")
+            for instr in manual_dl.instructions:
+                if "extract" in instr.lower() or "mv " in instr.lower() or "verify" in instr.lower():
+                    console.print(f"  - {instr}")
+
+
+@main.command()
+@click.argument("config_path", type=click.Path(exists=True))
+@click.option(
     "--skip-install",
     is_flag=True,
     help="Skip installation verification, just run the test",
@@ -531,6 +760,193 @@ def list_configs(path: str):
 
         console.print(table)
         console.print()
+
+
+@main.group()
+def skill():
+    """Manage and execute computational skills."""
+    pass
+
+
+@skill.command(name="list")
+@click.option("--category", "-c", help="Filter by category")
+@click.option("--tag", "-t", help="Filter by tag")
+def skill_list(category: str | None, tag: str | None):
+    """List available skills.
+
+    Example:
+        configdiscovery skill list
+        configdiscovery skill list --category quantum_chemistry
+    """
+    from .skills import get_registry
+
+    registry = get_registry()
+    skills = registry.list_skills(category=category, tag=tag)
+
+    if not skills:
+        console.print("No skills found.")
+        return
+
+    # Group by category
+    by_category: dict[str, list] = {}
+    for s in skills:
+        if s.category not in by_category:
+            by_category[s.category] = []
+        by_category[s.category].append(s)
+
+    for cat, cat_skills in sorted(by_category.items()):
+        table = Table(title=f"Category: {cat}")
+        table.add_column("Skill")
+        table.add_column("Description")
+        table.add_column("Systems")
+
+        for s in cat_skills:
+            systems = ", ".join(s.available_systems()) or "none"
+            table.add_row(s.name, s.description[:50] + "..." if len(s.description) > 50 else s.description, systems)
+
+        console.print(table)
+        console.print()
+
+
+@skill.command(name="show")
+@click.argument("skill_name")
+def skill_show(skill_name: str):
+    """Show details of a specific skill.
+
+    Example:
+        configdiscovery skill show molecular_energy
+    """
+    from .skills import get_registry
+
+    registry = get_registry()
+    s = registry.get(skill_name)
+
+    if not s:
+        console.print(f"[red]Skill '{skill_name}' not found[/red]")
+        sys.exit(1)
+
+    console.print(f"[bold green]{s.name}[/bold green]")
+    console.print(f"[italic]{s.description}[/italic]\n")
+    console.print(f"Category: {s.category}")
+    console.print(f"Tags: {', '.join(s.tags)}\n")
+
+    # Inputs
+    if s.inputs:
+        console.print("[bold]Inputs:[/bold]")
+        for name, spec in s.inputs.items():
+            req = "[red]*[/red]" if spec.required else ""
+            default = f" (default: {spec.default})" if spec.default else ""
+            options = f" [{', '.join(spec.options)}]" if spec.options else ""
+            unit = f" [{spec.unit}]" if spec.unit else ""
+            console.print(f"  {req}{name}: {spec.type.value}{unit}{options}{default}")
+            if spec.description:
+                console.print(f"      {spec.description}")
+        console.print()
+
+    # Outputs
+    if s.outputs:
+        console.print("[bold]Outputs:[/bold]")
+        for name, spec in s.outputs.items():
+            unit = f" [{spec.unit}]" if spec.unit else ""
+            console.print(f"  {name}: {spec.type.value}{unit}")
+            if spec.description:
+                console.print(f"      {spec.description}")
+        console.print()
+
+    # Implementations
+    console.print("[bold]Implementations:[/bold]")
+    for impl in s.implementations:
+        console.print(f"  - {impl.system}: {impl.config_path}")
+
+
+@skill.command(name="run")
+@click.argument("skill_name")
+@click.option("--system", "-s", help="Run on specific system")
+@click.option("--param", "-p", multiple=True, help="Parameters in key=value format")
+@click.option("--timeout", "-t", default=600, help="Timeout in seconds")
+def skill_run(skill_name: str, system: str | None, param: tuple[str, ...], timeout: int):
+    """Execute a skill.
+
+    Example:
+        configdiscovery skill run molecular_energy -p molecule="H 0 0 0\\nH 0 0 0.74"
+        configdiscovery skill run molecular_energy --system polaris -p method=DFT
+    """
+    from .skills import get_executor
+
+    # Parse parameters
+    kwargs = {}
+    for p in param:
+        if "=" not in p:
+            console.print(f"[red]Invalid parameter format: {p} (expected key=value)[/red]")
+            sys.exit(1)
+        key, value = p.split("=", 1)
+        # Try to parse as JSON for complex types
+        try:
+            import json
+            kwargs[key] = json.loads(value)
+        except json.JSONDecodeError:
+            kwargs[key] = value
+
+    executor = get_executor()
+    if system:
+        executor.set_preferred_system(system)
+
+    console.print(f"[bold]Running skill: {skill_name}[/bold]")
+    if system:
+        console.print(f"System: {system}")
+    console.print(f"Parameters: {kwargs}\n")
+
+    try:
+        result = executor.run(skill_name, system=system, timeout=timeout, **kwargs)
+
+        status = result.get("status", "completed")
+        if status == "failed":
+            console.print(f"[red]Skill execution failed[/red]")
+            console.print(f"Error: {result.get('error', 'Unknown error')}")
+            sys.exit(1)
+
+        console.print("[green]Skill completed successfully[/green]\n")
+        console.print("[bold]Results:[/bold]")
+        for key, value in result.items():
+            if isinstance(value, float):
+                console.print(f"  {key}: {value:.6f}")
+            elif isinstance(value, str) and len(value) > 100:
+                console.print(f"  {key}: {value[:100]}...")
+            else:
+                console.print(f"  {key}: {value}")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
+
+
+@skill.command(name="search")
+@click.argument("query")
+def skill_search(query: str):
+    """Search for skills by name, description, or tags.
+
+    Example:
+        configdiscovery skill search energy
+        configdiscovery skill search quantum
+    """
+    from .skills import get_registry
+
+    registry = get_registry()
+    results = registry.search(query)
+
+    if not results:
+        console.print(f"No skills matching '{query}'")
+        return
+
+    table = Table(title=f"Skills matching '{query}'")
+    table.add_column("Skill")
+    table.add_column("Category")
+    table.add_column("Description")
+
+    for s in results:
+        table.add_row(s.name, s.category, s.description[:60])
+
+    console.print(table)
 
 
 if __name__ == "__main__":
