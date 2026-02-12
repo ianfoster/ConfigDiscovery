@@ -1,0 +1,124 @@
+name: gpaw
+version: "25.x"
+description: |
+  GPAW is a DFT code based on the projector-augmented wave (PAW) method.
+  It uses real-space grids, localized atomic orbitals (LCAO), or plane waves.
+  GPAW is built on top of ASE.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  conda_env: gpaw_env
+  conda_packages:
+    - gpaw
+    - python=3.11
+  pip_packages: []
+  env_vars:
+    OMP_NUM_THREADS: "1"
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate gpaw_env
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n gpaw_env -c conda-forge gpaw python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate gpaw_env
+    python -c "import gpaw; print('GPAW version:', gpaw.__version__)"
+  notes: |
+    GPAW supports LCAO, real-space grids, and plane waves modes.
+
+execution:
+  function: |
+    def run_gpaw(system="H2", basis="dzp", xc="PBE", output_dir="gpaw_output"):
+        """Run GPAW calculation on Aurora."""
+        import subprocess
+        import os
+        import json
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        script = f'''
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+
+import json
+from ase import Atoms
+from gpaw import GPAW
+import numpy as np
+
+systems = {{
+    "H2": Atoms("H2", positions=[(0, 0, 0), (0, 0, 0.74)]),
+    "H2O": Atoms("H2O", positions=[(0, 0, 0), (0.757, 0.587, 0), (0, 0.757, 0.587)])
+}}
+
+atoms = systems["{system}"].copy()
+atoms.center(vacuum=5.0)
+
+calc = GPAW(mode="lcao", basis="{basis}", h=0.2, xc="{xc}")
+atoms.set_calculator(calc)
+
+energy = atoms.get_potential_energy()
+print(f"Energy: {{energy:.6f}} eV")
+
+results = {{
+    "status": "completed",
+    "system": "{system}",
+    "energy_eV": float(energy),
+    "basis": "{basis}",
+    "xc": "{xc}"
+}}
+
+with open("{output_dir}/results.json", "w") as f:
+    json.dump(results, f)
+'''
+
+        script_file = os.path.join(output_dir, "gpaw_calc.py")
+        with open(script_file, "w") as f:
+            f.write(script)
+
+        cmd = f"""
+        source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+        conda activate gpaw_env
+        python {script_file}
+        """
+
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True, timeout=600)
+
+        results_file = os.path.join(output_dir, "results.json")
+        if os.path.exists(results_file):
+            with open(results_file) as f:
+                results = json.load(f)
+        else:
+            results = {"status": "failed", "error": result.stderr}
+
+        results["stdout"] = result.stdout
+        return results
+  function_name: run_gpaw
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed GPAW via conda-forge on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - dft
+  - paw
+  - electronic-structure
+  - ase

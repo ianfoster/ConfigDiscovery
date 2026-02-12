@@ -1,0 +1,57 @@
+name: siesta
+version: "4.x"
+description: |
+  SIESTA is a DFT code that uses localized numerical atomic orbitals as
+  basis sets and norm-conserving pseudopotentials. Efficient for large systems.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  conda_env: siesta_env
+  conda_packages:
+    - siesta
+    - python=3.11
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate siesta_env
+
+installation:
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n siesta_env -c conda-forge siesta python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate siesta_env && which siesta
+
+execution:
+  function: |
+    def run_siesta(task="test", output_dir="siesta_output"):
+        """Run Siesta DFT calculation on Aurora."""
+        import subprocess
+        import os
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        conda = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate siesta_env && "
+        cmd = f"{conda}siesta --version"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "version": result.stdout.strip() if result.stdout else result.stderr[:200],
+            "output_dir": output_dir
+        }
+  function_name: run_siesta
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+  claude_model: claude-opus-4-5-20250514
+
+tags: [dft, materials, periodic, pseudopotentials]

@@ -1,0 +1,57 @@
+name: dftbplus
+version: "24.x"
+description: |
+  DFTB+ is a fast tight-binding DFT code. Much faster than full DFT while
+  maintaining reasonable accuracy for geometry optimization and dynamics.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  conda_env: dftbplus_env
+  conda_packages:
+    - dftbplus
+    - python=3.11
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate dftbplus_env
+
+installation:
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n dftbplus_env -c conda-forge dftbplus python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate dftbplus_env && dftb+ --version
+
+execution:
+  function: |
+    def run_dftbplus(task="test", output_dir="dftbplus_output"):
+        """Run DFTB+ tight-binding calculation on Aurora."""
+        import subprocess
+        import os
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        conda = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate dftbplus_env && "
+        cmd = f"{conda}dftb+ --version"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "version": result.stdout.strip() if result.stdout else result.stderr[:200],
+            "output_dir": output_dir
+        }
+  function_name: run_dftbplus
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+  claude_model: claude-opus-4-5-20250514
+
+tags: [tight_binding, semiempirical, materials, fast]

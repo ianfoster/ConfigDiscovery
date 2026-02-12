@@ -25,36 +25,42 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 
 ## Available Configurations
 
+Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - = Not available
+
 | Software | Domain | Polaris | Aurora |
 |----------|--------|:-------:|:------:|
-| [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ | |
+| [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ | [✓](configs/aurora/psi4.yaml) |
 | [PySCF](configs/polaris/pyscf.yaml) | Quantum Chemistry | ✅ | [✅](configs/aurora/pyscf.yaml) |
-| [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ | |
-| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ | |
+| [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ | [✓](configs/aurora/nwchem.yaml) |
+| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ | - |
 | [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ | [✅](configs/aurora/cp2k.yaml) |
-| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✅ | |
+| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✓ | [✓](configs/aurora/gpaw.yaml) |
 | [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ | [✅](configs/aurora/quantum-espresso.yaml) |
-| [Siesta](configs/polaris/siesta.yaml) | DFT (numerical orbitals) | ✅ | |
-| [Abinit](configs/polaris/abinit.yaml) | DFT (plane-wave) | ✅ | |
-| [DFTB+](configs/polaris/dftbplus.yaml) | Tight-binding DFT | ✅ | |
+| [Siesta](configs/polaris/siesta.yaml) | DFT (numerical orbitals) | ✓ | [✓](configs/aurora/siesta.yaml) |
+| [Abinit](configs/polaris/abinit.yaml) | DFT (plane-wave) | ✓ | [✓](configs/aurora/abinit.yaml) |
+| [DFTB+](configs/polaris/dftbplus.yaml) | Tight-binding DFT | ✓ | [✓](configs/aurora/dftbplus.yaml) |
 | [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ | [✅](configs/aurora/xtb.yaml) |
 | [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ | [✅](configs/aurora/openmm.yaml) |
 | [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ | [✅](configs/aurora/gromacs.yaml) |
-| [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ | |
-| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ | |
-| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✅ | |
+| [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ | [✓](configs/aurora/lammps.yaml) |
+| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ | - |
+| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✓ | [✓](configs/aurora/ambertools.yaml) |
 | [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ | [✅](configs/aurora/ase.yaml) |
 | [MDAnalysis](configs/polaris/mdanalysis.yaml) | Trajectory Analysis | ✅ | [✅](configs/aurora/mdanalysis.yaml) |
 | [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ | [✅](configs/aurora/phonopy.yaml) |
 | [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ | [✅](configs/aurora/schnetpack.yaml) |
-| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✅ | |
-| [MACE](configs/polaris/mace.yaml) | ML Potentials | ✅ | |
-| [RDKit](configs/polaris/rdkit.yaml) | Cheminformatics | ✅ | |
-| [Open Babel](configs/polaris/openbabel.yaml) | Molecule Conversion | ✅ | |
-| [PyMatGen](configs/polaris/pymatgen.yaml) | Materials Analysis | ✅ | |
+| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✓ | [✓](configs/aurora/deepmd-kit.yaml) |
+| [MACE](configs/polaris/mace.yaml) | ML Potentials | ✓ | - |
+| [RDKit](configs/polaris/rdkit.yaml) | Cheminformatics | ✓ | [✓](configs/aurora/rdkit.yaml) |
+| [Open Babel](configs/polaris/openbabel.yaml) | Molecule Conversion | ✓ | [✓](configs/aurora/openbabel.yaml) |
+| [PyMatGen](configs/polaris/pymatgen.yaml) | Materials Analysis | ✓ | [✓](configs/aurora/pymatgen.yaml) |
 | [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ | [✅](configs/aurora/openfoam.yaml) |
 
-**Polaris**: 26 packages | **Aurora**: 11 packages
+**Polaris**: 26 packages (18 tested, 8 installed) | **Aurora**: 23 packages (11 tested, 12 installed)
+
+Notes:
+- ORCA and NAMD require manual download and cannot be installed via conda
+- MACE failed to install on Aurora due to disk quota limits
 
 ## Quick Start
 

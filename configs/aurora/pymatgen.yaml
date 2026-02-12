@@ -1,0 +1,63 @@
+name: pymatgen
+version: "2024.x"
+description: |
+  PyMatGen (Python Materials Genomics) is a library for materials analysis,
+  structure manipulation, and interfacing with materials databases.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  pip_packages:
+    - pymatgen
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate base
+
+installation:
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate base
+    - pip install pymatgen
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate base && python -c "import pymatgen; print(pymatgen.__version__)"
+
+execution:
+  function: |
+    def run_pymatgen(task="structure_analysis", formula="NaCl", output_dir="pymatgen_output"):
+        """Run PyMatGen materials analysis on Aurora."""
+        import os
+        import json
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        from pymatgen.core import Structure, Lattice
+
+        lattice = Lattice.cubic(5.64)
+        structure = Structure(lattice, ["Na", "Cl"], [[0, 0, 0], [0.5, 0.5, 0.5]])
+
+        result = {
+            "status": "completed",
+            "formula": structure.formula,
+            "num_sites": structure.num_sites,
+            "volume": structure.volume,
+            "density": structure.density
+        }
+
+        with open(os.path.join(output_dir, "result.json"), "w") as f:
+            json.dump(result, f)
+
+        return result
+  function_name: run_pymatgen
+  resources:
+    nodes: 1
+    cores_per_node: 1
+    memory_gb: 4
+
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+  claude_model: claude-opus-4-5-20250514
+
+tags: [materials, analysis, structures, databases]

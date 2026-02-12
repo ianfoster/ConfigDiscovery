@@ -1,0 +1,165 @@
+name: psi4
+version: "1.10"
+description: |
+  Psi4 is an open-source quantum chemistry package for high-accuracy
+  calculations of molecular properties and energies. It supports a wide
+  range of methods including Hartree-Fock (HF), Density Functional Theory
+  (DFT), Moller-Plesset perturbation theory (MP2), and Coupled Cluster
+  (CCSD, CCSD(T)). Psi4 is particularly known for its efficient
+  implementations and Python API for scriptable workflows.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  conda_env: psi4_env
+  conda_packages:
+    - psi4
+    - python=3.11
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate psi4_env
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n psi4_env -c conda-forge psi4 python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate psi4_env
+    python -c "import psi4; print('Psi4 version:', psi4.__version__)"
+  notes: |
+    Psi4 is available from conda-forge. The conda package includes all
+    necessary dependencies (libint, libxc, etc.).
+
+execution:
+  function: |
+    def run_psi4_calculation(method="hf", basis="sto-3g", calculation_type="energy"):
+        """Run a Psi4 quantum chemistry calculation on Aurora."""
+        import subprocess
+        import os
+        import tempfile
+        import json
+        import textwrap
+
+        output_dir = tempfile.mkdtemp(prefix='psi4_')
+
+        script = textwrap.dedent(f"""
+            import psi4
+            import os
+            import json
+
+            print(f"Psi4 version: {{psi4.__version__}}")
+
+            psi4.core.set_memory_bytes(int(2e9))
+            psi4.core.set_num_threads(4)
+            psi4.core.set_output_file("{output_dir}/psi4_output.dat", False)
+
+            molecule = psi4.geometry('''
+            0 1
+            O  0.000000  0.000000  0.000000
+            H  0.757000  0.586000  0.000000
+            H -0.757000  0.586000  0.000000
+            ''')
+
+            print("Running {method}/{basis} {calculation_type} calculation...")
+
+            try:
+                if "{calculation_type}" == "energy":
+                    energy = psi4.energy("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "calculation_type": "energy",
+                        "method": "{method}",
+                        "basis": "{basis}",
+                        "energy_hartree": energy,
+                        "energy_eV": energy * 27.2114,
+                        "output_dir": "{output_dir}"
+                    }}
+                elif "{calculation_type}" == "optimize":
+                    energy = psi4.optimize("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "calculation_type": "optimize",
+                        "method": "{method}",
+                        "basis": "{basis}",
+                        "final_energy_hartree": energy,
+                        "output_dir": "{output_dir}"
+                    }}
+                else:
+                    energy = psi4.energy("{method}/{basis}", molecule=molecule)
+                    results = {{
+                        "status": "completed",
+                        "energy_hartree": energy,
+                        "output_dir": "{output_dir}"
+                    }}
+
+                print(f"Calculation completed! Energy: {{energy:.8f}} hartree")
+
+            except Exception as e:
+                results = {{"status": "failed", "error": str(e), "output_dir": "{output_dir}"}}
+
+            finally:
+                psi4.core.close_outfile()
+
+            with open("{output_dir}/results.json", "w") as f:
+                json.dump(results, f)
+
+            print("Done!")
+        """)
+
+        script_path = os.path.join(output_dir, "run_psi4.py")
+        with open(script_path, "w") as f:
+            f.write(script)
+
+        cmd = f"""
+        source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+        conda activate psi4_env
+        cd {output_dir}
+        python run_psi4.py
+        """
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True)
+
+        results_file = os.path.join(output_dir, "results.json")
+        if os.path.exists(results_file):
+            with open(results_file) as f:
+                results = json.load(f)
+            results["stdout"] = result.stdout
+            return results
+        else:
+            return {
+                "status": "failed",
+                "error": result.stderr or "No results file generated",
+                "stdout": result.stdout,
+                "returncode": result.returncode,
+                "output_dir": output_dir
+            }
+  function_name: run_psi4_calculation
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed Psi4 v1.10 via conda-forge on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - quantum-chemistry
+  - electronic-structure
+  - dft
+  - coupled-cluster
+  - python-api

@@ -1,0 +1,81 @@
+name: deepmd-kit
+version: "3.x"
+description: |
+  DeePMD-kit is a deep learning package for many-body potential energy
+  representation and molecular dynamics. It enables training neural network
+  potentials from ab initio data.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  pip_packages:
+    - deepmd-kit
+  env_vars:
+    DP_BACKEND: tensorflow
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate base
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate base
+    - pip install deepmd-kit
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate base
+    dp --version
+  notes: |
+    DeePMD-kit supports multiple backends: TensorFlow, PyTorch, Paddle, JAX.
+
+execution:
+  function: |
+    def run_deepmd_kit(task_type="test", output_dir="deepmd_output"):
+        """Run DeePMD-kit on Aurora."""
+        import subprocess
+        import os
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        cmd = f"""
+        source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+        conda activate base
+        cd {output_dir}
+        dp --version
+        python -c "import deepmd; print('DeePMD-kit version:', deepmd.__version__)"
+        """
+
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "output_dir": output_dir
+        }
+  function_name: run_deepmd_kit
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed DeePMD-kit via pip on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - machine-learning
+  - ml-potential
+  - neural-network
+  - deep-learning

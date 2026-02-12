@@ -1,0 +1,83 @@
+name: ambertools
+version: "24.8"
+description: |
+  AmberTools is a comprehensive suite for molecular dynamics simulation and analysis,
+  including tools for system preparation (tleap), simulation (sander), trajectory
+  analysis (cpptraj), and small molecule parameterization (antechamber).
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  conda_env: ambertools_env
+  conda_packages:
+    - ambertools
+    - python=3.11
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate ambertools_env
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n ambertools_env -c conda-forge ambertools python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate ambertools_env
+    cpptraj --version
+  notes: |
+    AmberTools includes: tleap, sander, cpptraj, antechamber, parmed, pytraj.
+
+execution:
+  function: |
+    def run_ambertools(task_type="test", output_dir="amber_output"):
+        """Run AmberTools on Aurora."""
+        import subprocess
+        import os
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        cmd = f"""
+        source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+        conda activate ambertools_env
+        cd {output_dir}
+        cpptraj --version
+        antechamber -L
+        python -c "import pytraj; print('pytraj version:', pytraj.__version__)"
+        """
+
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "output_dir": output_dir
+        }
+  function_name: run_ambertools
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed AmberTools via conda-forge on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - molecular-dynamics
+  - biomolecular
+  - amber
+  - trajectory-analysis

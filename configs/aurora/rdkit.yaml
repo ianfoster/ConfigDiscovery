@@ -1,0 +1,81 @@
+name: rdkit
+version: "2024.x"
+description: |
+  RDKit is an open-source cheminformatics toolkit for molecular manipulation,
+  descriptor calculation, fingerprinting, and substructure searching.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  conda_env: rdkit_env
+  conda_packages:
+    - rdkit
+    - python=3.11
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate rdkit_env
+
+installation:
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n rdkit_env -c conda-forge rdkit python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate rdkit_env && python -c "import rdkit; print(rdkit.__version__)"
+
+execution:
+  function: |
+    def run_rdkit(smiles="CCO", output_dir="rdkit_output"):
+        """Run RDKit cheminformatics calculation on Aurora."""
+        import subprocess
+        import os
+        import json
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        script = f'''
+import json
+from rdkit import Chem
+from rdkit.Chem import Descriptors
+
+smiles = "{smiles}"
+mol = Chem.MolFromSmiles(smiles)
+
+result = {{
+    "status": "completed",
+    "smiles": smiles,
+    "molecular_weight": Descriptors.MolWt(mol),
+    "logp": Descriptors.MolLogP(mol),
+    "num_atoms": mol.GetNumAtoms()
+}}
+
+with open("result.json", "w") as f:
+    json.dump(result, f)
+'''
+        script_file = os.path.join(output_dir, "rdkit_calc.py")
+        with open(script_file, "w") as f:
+            f.write(script)
+
+        conda = "source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh && conda activate rdkit_env && "
+        result = subprocess.run(f"{conda}cd {output_dir} && python rdkit_calc.py",
+                              shell=True, capture_output=True, text=True, timeout=60)
+
+        result_file = os.path.join(output_dir, "result.json")
+        if os.path.exists(result_file):
+            with open(result_file) as f:
+                return json.load(f)
+        return {"status": "failed", "error": result.stderr}
+  function_name: run_rdkit
+  resources:
+    nodes: 1
+    cores_per_node: 1
+    memory_gb: 4
+
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+  claude_model: claude-opus-4-5-20250514
+
+tags: [cheminformatics, molecules, descriptors, smiles]

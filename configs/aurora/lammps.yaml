@@ -1,0 +1,135 @@
+name: lammps
+version: "2024.08.29"
+description: |
+  LAMMPS (Large-scale Atomic/Molecular Massively Parallel Simulator) is a
+  classical molecular dynamics code with a focus on materials modeling.
+  It can simulate atoms, molecules, polymers, biological systems, and
+  coarse-grained particles in various ensembles.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  conda_env: lammps_env
+  conda_packages:
+    - lammps
+    - python=3.11
+    - numpy
+  pip_packages: []
+  env_vars: {}
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate lammps_env
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n lammps_env -c conda-forge lammps python=3.11 numpy -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate lammps_env
+    lmp -help | head -10
+  notes: |
+    The conda-forge LAMMPS package includes many optional packages:
+    - MANYBODY: Many-body potentials (EAM, Tersoff, etc.)
+    - MOLECULE: Bond/angle/dihedral potentials
+    - KSPACE: Long-range electrostatics
+    - ML-SNAP, ML-IAP: Machine learning potentials
+
+execution:
+  function: |
+    def run_lammps(num_steps=1000, temperature=1.0, dump_freq=100, output_dir="~/lammps_run"):
+        """Run LAMMPS molecular dynamics simulation on Aurora."""
+        import subprocess
+        import os
+        from pathlib import Path
+
+        output_dir = os.path.expanduser(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        default_script = f"""# Lennard-Jones MD simulation
+    units lj
+    dimension 3
+    boundary p p p
+
+    lattice fcc 0.8442
+    region box block 0 4 0 4 0 4
+    create_box 1 box
+    create_atoms 1 box
+
+    mass 1 1.0
+
+    pair_style lj/cut 2.5
+    pair_coeff 1 1 1.0 1.0 2.5
+
+    neighbor 0.3 bin
+    neigh_modify every 1 delay 0 check yes
+
+    fix 1 all nve
+    fix 2 all langevin {temperature} {temperature} 1.0 12345
+
+    timestep 0.005
+    thermo {dump_freq}
+    thermo_style custom step temp pe ke etotal press
+
+    dump 1 all atom {dump_freq} trajectory.lammpstrj
+
+    run {num_steps}
+
+    write_data final.data
+    """
+
+        input_path = os.path.join(output_dir, "input.in")
+        with open(input_path, 'w') as f:
+            f.write(default_script)
+
+        cmd = f"""
+        source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+        conda activate lammps_env
+        cd {output_dir}
+        lmp -in input.in
+        """
+
+        result = subprocess.run(cmd, shell=True, executable='/bin/bash',
+                              capture_output=True, text=True)
+
+        output_files = []
+        for pattern in ['*.lammpstrj', '*.data', 'log.lammps']:
+            output_files.extend(Path(output_dir).glob(pattern))
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "returncode": result.returncode,
+            "stdout": result.stdout[-2000:] if result.stdout else "",
+            "stderr": result.stderr[-1000:] if result.stderr else "",
+            "output_dir": output_dir,
+            "output_files": [str(f) for f in output_files],
+            "num_steps": num_steps,
+            "temperature": temperature
+        }
+  function_name: run_lammps
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 8
+    gpus: 0
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed LAMMPS via conda-forge on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - molecular-dynamics
+  - materials-science
+  - classical-md
+  - lennard-jones
+  - mpi-parallel

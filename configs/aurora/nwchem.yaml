@@ -1,0 +1,155 @@
+name: nwchem
+version: "7.2.0"
+description: |
+  NWChem is an open-source computational chemistry package designed to run on
+  high-performance parallel supercomputers. It provides methods for computing
+  ground and excited-state properties of large molecules using various
+  electronic structure theories including Hartree-Fock, DFT, MP2, and Coupled
+  Cluster. NWChem also supports plane-wave DFT for periodic systems.
+
+hpc_system: aurora
+endpoint_id: 608403f7-58df-44f6-a27b-b6084cae113d
+
+environment:
+  modules: []
+  conda_env: nwchem_env
+  conda_packages:
+    - python=3.11
+    - nwchem
+  pip_packages: []
+  env_vars:
+    OMPI_MCA_btl_vader_single_copy_mechanism: "none"
+  setup_commands:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda activate nwchem_env
+    - export OMPI_MCA_btl_vader_single_copy_mechanism=none
+
+installation:
+  prerequisites:
+    - Conda (Intel conda-miniforge on Aurora)
+  steps:
+    - source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    - conda create -n nwchem_env -c conda-forge nwchem python=3.11 -y
+  verification: |
+    source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+    conda activate nwchem_env
+    nwchem --version 2>&1 | head -5
+  notes: |
+    The conda-forge NWChem package is built with OpenMPI support.
+    Set OMPI_MCA_btl_vader_single_copy_mechanism=none to avoid warnings.
+
+execution:
+  function: |
+    def run_nwchem(calculation_type="energy", method="rhf", basis="6-31g"):
+        """Run NWChem quantum chemistry calculations on Aurora."""
+        import subprocess
+        import os
+        import tempfile
+        import re
+        import textwrap
+
+        output_dir = tempfile.mkdtemp(prefix='nwchem_')
+        calc_name = "nwchem_job"
+
+        if method.lower() == "dft":
+            theory_block = "dft\n  xc b3lyp\nend"
+            task_line = f"task dft {calculation_type}"
+        elif method.lower() in ["mp2", "ccsd"]:
+            theory_block = ""
+            task_line = f"task {method} {calculation_type}"
+        else:
+            theory_block = ""
+            task_line = f"task scf {calculation_type}"
+
+        input_content = textwrap.dedent(f"""
+            start {calc_name}
+            title "Water molecule {method}/{basis} {calculation_type}"
+
+            memory 1000 mb
+
+            geometry units angstrom
+              O  0.000000  0.000000  0.117489
+              H  0.756950  0.000000 -0.469957
+              H -0.756950  0.000000 -0.469957
+            end
+
+            basis
+              * library {basis}
+            end
+            {theory_block}
+            {task_line}
+        """)
+
+        run_script = textwrap.dedent(f"""
+            #!/bin/bash
+            source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+            conda activate nwchem_env
+            export OMPI_MCA_btl_vader_single_copy_mechanism=none
+
+            cd {output_dir}
+            nwchem {calc_name}.nw > {calc_name}.out 2>&1
+        """)
+
+        input_path = os.path.join(output_dir, f"{calc_name}.nw")
+        script_path = os.path.join(output_dir, "run_nwchem.sh")
+
+        with open(input_path, "w") as f:
+            f.write(input_content)
+        with open(script_path, "w") as f:
+            f.write(run_script)
+        os.chmod(script_path, 0o755)
+
+        result = subprocess.run(["bash", script_path], capture_output=True, text=True, cwd=output_dir)
+
+        output_file = os.path.join(output_dir, f"{calc_name}.out")
+        results = {
+            "calculation_type": calculation_type,
+            "method": method,
+            "basis": basis,
+            "output_dir": output_dir
+        }
+
+        if os.path.exists(output_file):
+            with open(output_file, "r") as f:
+                content = f.read()
+
+            scf_match = re.search(r'Total SCF energy\s*=\s*([-\d.]+)', content)
+            if scf_match:
+                results["scf_energy_hartree"] = float(scf_match.group(1))
+                results["status"] = "completed"
+
+            dft_match = re.search(r'Total DFT energy\s*=\s*([-\d.]+)', content)
+            if dft_match:
+                results["dft_energy_hartree"] = float(dft_match.group(1))
+                results["status"] = "completed"
+
+            if "status" not in results:
+                results["status"] = "failed"
+                results["error"] = content[-2000:]
+        else:
+            results["status"] = "failed"
+            results["error"] = result.stderr or "No output file"
+
+        return results
+  function_name: run_nwchem
+  resources:
+    nodes: 1
+    cores_per_node: 32
+    memory_gb: 64
+    walltime: "01:00:00"
+    queue: debug
+
+discovery_log:
+  discovered_date: "2026-02-12"
+  discovery_method: "LLM-guided exploration via Globus Compute"
+  attempts: 1
+  notes: |
+    Installed NWChem via conda-forge on Aurora.
+  claude_model: claude-opus-4-5-20250514
+
+tags:
+  - quantum-chemistry
+  - electronic-structure
+  - dft
+  - hartree-fock
+  - mpi-parallel
