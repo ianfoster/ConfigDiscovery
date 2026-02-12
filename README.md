@@ -25,45 +25,29 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 
 ## Available Configurations
 
-### ALCF Polaris
+| Software | Domain | Polaris | Aurora |
+|----------|--------|:-------:|:------:|
+| [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ | |
+| [PySCF](configs/polaris/pyscf.yaml) | Quantum Chemistry | ✅ | [✅](configs/aurora/pyscf.yaml) |
+| [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ | |
+| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ | |
+| [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ | [✅](configs/aurora/cp2k.yaml) |
+| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✅ | |
+| [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ | [✅](configs/aurora/quantum-espresso.yaml) |
+| [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ | [✅](configs/aurora/xtb.yaml) |
+| [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ | [✅](configs/aurora/openmm.yaml) |
+| [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ | [✅](configs/aurora/gromacs.yaml) |
+| [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ | |
+| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ | |
+| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✅ | |
+| [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ | [✅](configs/aurora/ase.yaml) |
+| [MDAnalysis](configs/polaris/mdanalysis.yaml) | Trajectory Analysis | ✅ | [✅](configs/aurora/mdanalysis.yaml) |
+| [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ | [✅](configs/aurora/phonopy.yaml) |
+| [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ | [✅](configs/aurora/schnetpack.yaml) |
+| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✅ | |
+| [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ | [✅](configs/aurora/openfoam.yaml) |
 
-| Software | Domain | Status |
-|----------|--------|--------|
-| [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ |
-| [PySCF](configs/polaris/pyscf.yaml) | Quantum Chemistry | ✅ |
-| [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ |
-| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ |
-| [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ |
-| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✅ |
-| [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ |
-| [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ |
-| [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ |
-| [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ |
-| [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ |
-| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ |
-| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✅ |
-| [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ |
-| [MDAnalysis](configs/polaris/mdanalysis.yaml) | Trajectory Analysis | ✅ |
-| [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ |
-| [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ |
-| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✅ |
-| [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ |
-
-### ALCF Aurora
-
-| Software | Domain | Status |
-|----------|--------|--------|
-| [ASE](configs/aurora/ase.yaml) | Atomistic Simulations | ✅ |
-| [PySCF](configs/aurora/pyscf.yaml) | Quantum Chemistry | ✅ |
-| [xtb](configs/aurora/xtb.yaml) | Semi-empirical QM | ✅ |
-| [Phonopy](configs/aurora/phonopy.yaml) | Phonon Calculations | ✅ |
-| [MDAnalysis](configs/aurora/mdanalysis.yaml) | Trajectory Analysis | ✅ |
-| [SchNetPack](configs/aurora/schnetpack.yaml) | ML Potentials | ✅ |
-| [OpenMM](configs/aurora/openmm.yaml) | Biomolecular MD | ✅ |
-| [CP2K](configs/aurora/cp2k.yaml) | DFT (GPW method) | ✅ |
-| [GROMACS](configs/aurora/gromacs.yaml) | Classical MD | ✅ |
-| [OpenFOAM](configs/aurora/openfoam.yaml) | CFD Simulations | ✅ |
-| [Quantum ESPRESSO](configs/aurora/quantum-espresso.yaml) | Plane-wave DFT | ✅ |
+**Polaris**: 19 packages | **Aurora**: 11 packages
 
 ## Quick Start
 
