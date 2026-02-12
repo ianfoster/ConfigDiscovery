@@ -29,34 +29,34 @@ Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - 
 
 | Software | Domain | Polaris | Aurora |
 |----------|--------|:-------:|:------:|
-| [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ | [✓](configs/aurora/psi4.yaml) |
-| [PySCF](configs/polaris/pyscf.yaml) | Quantum Chemistry | ✅ | [✅](configs/aurora/pyscf.yaml) |
-| [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ | [✓](configs/aurora/nwchem.yaml) |
-| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ | - |
-| [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ | [✅](configs/aurora/cp2k.yaml) |
-| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✓ | [✓](configs/aurora/gpaw.yaml) |
-| [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ | [✅](configs/aurora/quantum-espresso.yaml) |
-| [Siesta](configs/polaris/siesta.yaml) | DFT (numerical orbitals) | ✓ | [✓](configs/aurora/siesta.yaml) |
-| [Abinit](configs/polaris/abinit.yaml) | DFT (plane-wave) | ✓ | [✓](configs/aurora/abinit.yaml) |
-| [DFTB+](configs/polaris/dftbplus.yaml) | Tight-binding DFT | ✓ | [✓](configs/aurora/dftbplus.yaml) |
-| [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ | [✅](configs/aurora/xtb.yaml) |
-| [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ | [✅](configs/aurora/openmm.yaml) |
-| [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ | [✅](configs/aurora/gromacs.yaml) |
-| [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ | [✓](configs/aurora/lammps.yaml) |
-| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ | - |
-| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✓ | [✓](configs/aurora/ambertools.yaml) |
-| [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ | [✅](configs/aurora/ase.yaml) |
-| [MDAnalysis](configs/polaris/mdanalysis.yaml) | Trajectory Analysis | ✅ | [✅](configs/aurora/mdanalysis.yaml) |
-| [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ | [✅](configs/aurora/phonopy.yaml) |
-| [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ | [✅](configs/aurora/schnetpack.yaml) |
-| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✓ | [✓](configs/aurora/deepmd-kit.yaml) |
-| [MACE](configs/polaris/mace.yaml) | ML Potentials | ✓ | - |
-| [RDKit](configs/polaris/rdkit.yaml) | Cheminformatics | ✓ | [✓](configs/aurora/rdkit.yaml) |
-| [Open Babel](configs/polaris/openbabel.yaml) | Molecule Conversion | ✓ | [✓](configs/aurora/openbabel.yaml) |
-| [PyMatGen](configs/polaris/pymatgen.yaml) | Materials Analysis | ✓ | [✓](configs/aurora/pymatgen.yaml) |
-| [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ | [✅](configs/aurora/openfoam.yaml) |
+| Psi4 | Quantum Chemistry | [✅](configs/polaris/psi4.yaml) | [✓](configs/aurora/psi4.yaml) |
+| PySCF | Quantum Chemistry | [✅](configs/polaris/pyscf.yaml) | [✅](configs/aurora/pyscf.yaml) |
+| NWChem | Quantum Chemistry | [✅](configs/polaris/nwchem.yaml) | [✓](configs/aurora/nwchem.yaml) |
+| ORCA | Quantum Chemistry | [✅](configs/polaris/orca.yaml) | - |
+| CP2K | DFT (GPW method) | [✅](configs/polaris/cp2k.yaml) | [✅](configs/aurora/cp2k.yaml) |
+| GPAW | DFT (PAW method) | [✅](configs/polaris/gpaw.yaml) | [✓](configs/aurora/gpaw.yaml) |
+| Quantum ESPRESSO | Plane-wave DFT | [✅](configs/polaris/quantum-espresso.yaml) | [✅](configs/aurora/quantum-espresso.yaml) |
+| Siesta | DFT (numerical orbitals) | [✅](configs/polaris/siesta.yaml) | [✓](configs/aurora/siesta.yaml) |
+| Abinit | DFT (plane-wave) | [✅](configs/polaris/abinit.yaml) | [✓](configs/aurora/abinit.yaml) |
+| DFTB+ | Tight-binding DFT | [✅](configs/polaris/dftbplus.yaml) | [✓](configs/aurora/dftbplus.yaml) |
+| xtb | Semi-empirical QM | [✅](configs/polaris/xtb.yaml) | [✅](configs/aurora/xtb.yaml) |
+| OpenMM | Biomolecular MD | [✅](configs/polaris/openmm.yaml) | [✅](configs/aurora/openmm.yaml) |
+| GROMACS | Classical MD | [✅](configs/polaris/gromacs.yaml) | [✅](configs/aurora/gromacs.yaml) |
+| LAMMPS | Classical MD | [✅](configs/polaris/lammps.yaml) | [✓](configs/aurora/lammps.yaml) |
+| NAMD | Biomolecular MD | [✅](configs/polaris/namd.yaml) | - |
+| AmberTools | Biomolecular Tools | [✅](configs/polaris/ambertools.yaml) | [✓](configs/aurora/ambertools.yaml) |
+| ASE | Atomistic Simulations | [✅](configs/polaris/ase.yaml) | [✅](configs/aurora/ase.yaml) |
+| MDAnalysis | Trajectory Analysis | [✅](configs/polaris/mdanalysis.yaml) | [✅](configs/aurora/mdanalysis.yaml) |
+| Phonopy | Phonon Calculations | [✅](configs/polaris/phonopy.yaml) | [✅](configs/aurora/phonopy.yaml) |
+| SchNetPack | ML Potentials | [✅](configs/polaris/schnetpack.yaml) | [✅](configs/aurora/schnetpack.yaml) |
+| DeePMD-kit | ML Potentials | [✅](configs/polaris/deepmd-kit.yaml) | [✓](configs/aurora/deepmd-kit.yaml) |
+| MACE | ML Potentials | [✅](configs/polaris/mace.yaml) | - |
+| RDKit | Cheminformatics | [✅](configs/polaris/rdkit.yaml) | [✓](configs/aurora/rdkit.yaml) |
+| Open Babel | Molecule Conversion | [✅](configs/polaris/openbabel.yaml) | [✓](configs/aurora/openbabel.yaml) |
+| PyMatGen | Materials Analysis | [✅](configs/polaris/pymatgen.yaml) | [✓](configs/aurora/pymatgen.yaml) |
+| OpenFOAM | CFD Simulations | [✅](configs/polaris/openfoam.yaml) | [✅](configs/aurora/openfoam.yaml) |
 
-**Polaris**: 26 packages (18 tested, 8 installed) | **Aurora**: 23 packages (11 tested, 12 installed)
+**Polaris**: 26 packages (all tested) | **Aurora**: 23 packages (11 tested, 12 installed)
 
 Notes:
 - ORCA and NAMD require manual download and cannot be installed via conda
