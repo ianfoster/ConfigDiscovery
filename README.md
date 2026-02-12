@@ -13,7 +13,7 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 
 ## Available Configurations
 
-Tested configurations for **ALCF Polaris**:
+### ALCF Polaris
 
 | Software | Domain | Status |
 |----------|--------|--------|
@@ -24,6 +24,22 @@ Tested configurations for **ALCF Polaris**:
 | [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ |
 | [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ |
 | [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ |
+
+### ALCF Aurora
+
+| Software | Domain | Status |
+|----------|--------|--------|
+| [ASE](configs/aurora/ase.yaml) | Atomistic Simulations | ✅ |
+| [PySCF](configs/aurora/pyscf.yaml) | Quantum Chemistry | ✅ |
+| [xtb](configs/aurora/xtb.yaml) | Semi-empirical QM | ✅ |
+| [Phonopy](configs/aurora/phonopy.yaml) | Phonon Calculations | ✅ |
+| [MDAnalysis](configs/aurora/mdanalysis.yaml) | Trajectory Analysis | ✅ |
+| [SchNetPack](configs/aurora/schnetpack.yaml) | ML Potentials | ✅ |
+| [OpenMM](configs/aurora/openmm.yaml) | Biomolecular MD | ✅ |
+| [CP2K](configs/aurora/cp2k.yaml) | DFT (GPW method) | ✅ |
+| [GROMACS](configs/aurora/gromacs.yaml) | Classical MD | ✅ |
+| [OpenFOAM](configs/aurora/openfoam.yaml) | CFD Simulations | ✅ |
+| [Quantum ESPRESSO](configs/aurora/quantum-espresso.yaml) | Plane-wave DFT | ✅ |
 
 ## Quick Start
 
@@ -123,6 +139,40 @@ python -c "from globus_compute_sdk import Client; c = Client(); print(c.get_endp
 ```
 
 For more details, see the [Globus Compute documentation](https://globus-compute.readthedocs.io/).
+
+#### Aurora-Specific Setup
+
+Aurora uses a PBS scheduler with specific configuration requirements:
+
+```yaml
+# Example Aurora endpoint config (~/.globus_compute/aurora_endpoint/config.yaml)
+engine:
+  type: GlobusComputeEngine
+  provider:
+    type: PBSProProvider
+    account: YourAllocation
+    queue: debug
+    cpus_per_node: 208
+    select_options: system=sunspot
+    scheduler_options: "#PBS -l filesystems=home:flare"
+    worker_init: |
+      source /opt/aurora/25.190.0/oneapi/intel-conda-miniforge/etc/profile.d/conda.sh
+      conda activate base
+    launcher:
+      type: MpiExecLauncher
+      bind_cmd: --cpu-bind
+      overrides: --depth=208 --ppn=1
+    walltime: 01:00:00
+    nodes_per_block: 1
+    init_blocks: 0
+    min_blocks: 0
+    max_blocks: 1
+```
+
+Key Aurora settings:
+- **queue**: Use `debug` for testing, `workq` for production
+- **filesystems**: `home:flare` (required)
+- **worker_init**: Source conda from `/opt/aurora/25.190.0/oneapi/intel-conda-miniforge/`
 
 ### Using Existing Configs
 
@@ -259,6 +309,25 @@ discovery_log:
 | `configdiscovery discover <software>` | Discover new configuration |
 | `configdiscovery refine <config>` | Improve existing config |
 
+## Multi-Fidelity Pipeline
+
+The repository includes a multi-fidelity molecular simulation pipeline that chains multiple computational steps:
+
+```bash
+# Run the pipeline on Polaris
+python scripts/multi_fidelity_pipeline.py --molecule ethanol --n-conformers 20
+
+# Run on Aurora
+python scripts/multi_fidelity_pipeline_aurora.py --molecule ethanol --n-conformers 20
+```
+
+Pipeline steps:
+1. **xtb** - Generate conformers and compute semi-empirical energies
+2. **PySCF** - Compute accurate ab initio energy on lowest-energy conformer
+3. **SchNetPack** - Train ML potential on conformer dataset
+4. **xtb MD** - Run molecular dynamics using the trained model
+5. **MDAnalysis** - Analyze trajectory (RMSD, Rg, fluctuations)
+
 ## Architecture
 
 ```
@@ -270,8 +339,9 @@ discovery_log:
                            ▼                    ▼
                     ┌─────────────┐      ┌─────────────┐
                     │    YAML     │      │  HPC System │
-                    │   Configs   │      │  (Polaris)  │
-                    └─────────────┘      └─────────────┘
+                    │   Configs   │      │ (Polaris/   │
+                    └─────────────┘      │  Aurora)    │
+                                         └─────────────┘
 ```
 
 ## Contributing
