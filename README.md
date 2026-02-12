@@ -18,12 +18,24 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 | Software | Domain | Status |
 |----------|--------|--------|
 | [Psi4](configs/polaris/psi4.yaml) | Quantum Chemistry | ✅ |
+| [PySCF](configs/polaris/pyscf.yaml) | Quantum Chemistry | ✅ |
 | [NWChem](configs/polaris/nwchem.yaml) | Quantum Chemistry | ✅ |
+| [ORCA](configs/polaris/orca.yaml) | Quantum Chemistry | ✅ |
 | [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ |
+| [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✅ |
 | [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ |
+| [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ |
 | [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ |
+| [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ |
 | [LAMMPS](configs/polaris/lammps.yaml) | Classical MD | ✅ |
+| [NAMD](configs/polaris/namd.yaml) | Biomolecular MD | ✅ |
+| [AmberTools](configs/polaris/ambertools.yaml) | Biomolecular Tools | ✅ |
 | [ASE](configs/polaris/ase.yaml) | Atomistic Simulations | ✅ |
+| [MDAnalysis](configs/polaris/mdanalysis.yaml) | Trajectory Analysis | ✅ |
+| [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ |
+| [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ |
+| [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✅ |
+| [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ |
 
 ### ALCF Aurora
 
