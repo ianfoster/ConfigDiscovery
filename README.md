@@ -4,6 +4,18 @@ LLM-driven HPC software configuration discovery via Globus Compute.
 
 ConfigDiscovery uses Claude to automatically discover how to install and run scientific software on HPC systems. It probes the remote system through Globus Compute, figures out what's available (modules, conda, compilers), and generates validated YAML configurations.
 
+## Table of Contents
+
+- [Features](#features)
+- [Available Configurations](#available-configurations)
+- [Quick Start](#quick-start)
+- [Skills](#skills)
+- [Multi-Fidelity Pipeline](#multi-fidelity-pipeline)
+- [CLI Commands](#cli-commands)
+- [Configuration Format](#configuration-format)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+
 ## Features
 
 - **Automatic Discovery**: Claude explores the HPC system and discovers working configurations
@@ -312,6 +324,8 @@ discovery_log:
 
 ## CLI Commands
 
+### Config Commands
+
 | Command | Description |
 |---------|-------------|
 | `configdiscovery list` | List all available configs |
@@ -320,6 +334,84 @@ discovery_log:
 | `configdiscovery run <config>` | Run with custom parameters |
 | `configdiscovery discover <software>` | Discover new configuration |
 | `configdiscovery refine <config>` | Improve existing config |
+
+### Skill Commands
+
+| Command | Description |
+|---------|-------------|
+| `configdiscovery skill list` | List all available skills |
+| `configdiscovery skill show <skill>` | Display skill details and implementations |
+| `configdiscovery skill run <skill>` | Run skill (auto-selects implementation) |
+| `configdiscovery skill search <query>` | Search skills by name/tag |
+
+## Skills
+
+Skills are abstract computational capabilities that can have multiple implementations across different HPC systems. This allows users to express intent ("compute molecular energy") without specifying how or where it runs.
+
+### Available Skills
+
+| Skill | Description | Implementations |
+|-------|-------------|-----------------|
+| `molecular_energy` | Compute quantum mechanical energy | Psi4, PySCF, NWChem, xtb, CP2K |
+| `geometry_optimization` | Optimize molecular geometry | Psi4, ASE, xtb |
+| `molecular_dynamics` | Run classical MD simulations | LAMMPS, GROMACS, OpenMM |
+| `biomolecular_md` | Biomolecular MD with force fields | OpenMM, GROMACS, NAMD |
+| `trajectory_analysis` | Analyze MD trajectories | MDAnalysis |
+| `train_ml_potential` | Train machine learning potentials | SchNetPack, DeePMD-kit |
+| `ml_potential_predict` | Predict with ML potentials | SchNetPack, DeePMD-kit |
+| `phonon_calculation` | Compute phonon properties | Phonopy |
+| `periodic_dft` | Periodic DFT calculations | Quantum ESPRESSO, CP2K, GPAW |
+| `cfd_simulation` | Computational fluid dynamics | OpenFOAM |
+
+### Using Skills
+
+```bash
+# List available skills
+configdiscovery skill list
+
+# Show skill details
+configdiscovery skill show molecular_energy
+
+# Run a skill (auto-selects best implementation)
+configdiscovery skill run molecular_energy \
+  --molecule water.xyz \
+  --method HF \
+  --basis sto-3g
+
+# Run on a specific system
+configdiscovery skill run molecular_energy \
+  --molecule water.xyz \
+  --system aurora
+
+# Search for skills by capability
+configdiscovery skill search "energy"
+```
+
+### Skill vs Config
+
+- **Configs** are low-level: specific software + specific HPC system
+- **Skills** are high-level: abstract capability with multiple implementations
+
+```
+User Request: "compute energy of this molecule"
+        │
+        ▼
+┌─────────────────┐
+│     Skill       │  molecular_energy
+│  (abstract)     │
+└────────┬────────┘
+         │ selects best implementation
+         ▼
+┌─────────────────┐
+│    Config       │  configs/aurora/pyscf.yaml
+│  (concrete)     │
+└────────┬────────┘
+         │ executes on
+         ▼
+┌─────────────────┐
+│   HPC System    │  Aurora via Globus Compute
+└─────────────────┘
+```
 
 ## Multi-Fidelity Pipeline
 
