@@ -1,0 +1,71 @@
+name: rdkit
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  conda_env: rdkit_env
+  conda_packages:
+    - rdkit
+installation:
+  steps:
+    - conda create -n rdkit_env -c conda-forge rdkit python=3.11 -y
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate rdkit_env && python -c "import rdkit; print(rdkit.__version__)"
+execution:
+  function: |
+    def run_rdkit(smiles="CCO", task="descriptors", output_dir="rdkit_output"):
+        """Run RDKit cheminformatics calculation."""
+        import subprocess
+        import os
+        import json
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        script = f'''
+import json
+from rdkit import Chem
+from rdkit.Chem import Descriptors, AllChem
+
+smiles = "{smiles}"
+mol = Chem.MolFromSmiles(smiles)
+
+if mol is None:
+    result = {{"status": "failed", "error": "Invalid SMILES"}}
+else:
+    result = {{
+        "status": "completed",
+        "smiles": smiles,
+        "molecular_weight": Descriptors.MolWt(mol),
+        "logp": Descriptors.MolLogP(mol),
+        "num_atoms": mol.GetNumAtoms(),
+        "num_bonds": mol.GetNumBonds(),
+        "num_rings": Descriptors.RingCount(mol)
+    }}
+
+with open("result.json", "w") as f:
+    json.dump(result, f)
+'''
+        script_file = os.path.join(output_dir, "rdkit_calc.py")
+        with open(script_file, "w") as f:
+            f.write(script)
+
+        conda = "source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && conda activate rdkit_env && "
+        result = subprocess.run(f"{conda}cd {output_dir} && python rdkit_calc.py",
+                              shell=True, capture_output=True, text=True, timeout=60)
+
+        result_file = os.path.join(output_dir, "result.json")
+        if os.path.exists(result_file):
+            with open(result_file) as f:
+                return json.load(f)
+
+        return {"status": "failed", "error": result.stderr}
+  function_name: run_rdkit
+  resources:
+    nodes: 1
+    cores_per_node: 1
+    memory_gb: 4
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+tags: [cheminformatics, molecules, descriptors, smiles]

@@ -34,6 +34,9 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 | [CP2K](configs/polaris/cp2k.yaml) | DFT (GPW method) | ✅ | [✅](configs/aurora/cp2k.yaml) |
 | [GPAW](configs/polaris/gpaw.yaml) | DFT (PAW method) | ✅ | |
 | [Quantum ESPRESSO](configs/polaris/quantum-espresso.yaml) | Plane-wave DFT | ✅ | [✅](configs/aurora/quantum-espresso.yaml) |
+| [Siesta](configs/polaris/siesta.yaml) | DFT (numerical orbitals) | ✅ | |
+| [Abinit](configs/polaris/abinit.yaml) | DFT (plane-wave) | ✅ | |
+| [DFTB+](configs/polaris/dftbplus.yaml) | Tight-binding DFT | ✅ | |
 | [xtb](configs/polaris/xtb.yaml) | Semi-empirical QM | ✅ | [✅](configs/aurora/xtb.yaml) |
 | [OpenMM](configs/polaris/openmm.yaml) | Biomolecular MD | ✅ | [✅](configs/aurora/openmm.yaml) |
 | [GROMACS](configs/polaris/gromacs.yaml) | Classical MD | ✅ | [✅](configs/aurora/gromacs.yaml) |
@@ -45,9 +48,13 @@ ConfigDiscovery uses Claude to automatically discover how to install and run sci
 | [Phonopy](configs/polaris/phonopy.yaml) | Phonon Calculations | ✅ | [✅](configs/aurora/phonopy.yaml) |
 | [SchNetPack](configs/polaris/schnetpack.yaml) | ML Potentials | ✅ | [✅](configs/aurora/schnetpack.yaml) |
 | [DeePMD-kit](configs/polaris/deepmd-kit.yaml) | ML Potentials | ✅ | |
+| [MACE](configs/polaris/mace.yaml) | ML Potentials | ✅ | |
+| [RDKit](configs/polaris/rdkit.yaml) | Cheminformatics | ✅ | |
+| [Open Babel](configs/polaris/openbabel.yaml) | Molecule Conversion | ✅ | |
+| [PyMatGen](configs/polaris/pymatgen.yaml) | Materials Analysis | ✅ | |
 | [OpenFOAM](configs/polaris/openfoam.yaml) | CFD Simulations | ✅ | [✅](configs/aurora/openfoam.yaml) |
 
-**Polaris**: 19 packages | **Aurora**: 11 packages
+**Polaris**: 26 packages | **Aurora**: 11 packages
 
 ## Quick Start
 

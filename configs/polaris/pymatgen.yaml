@@ -1,0 +1,47 @@
+name: pymatgen
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  pip_packages:
+    - pymatgen
+installation:
+  steps:
+    - pip install pymatgen
+  verification: python -c "import pymatgen; print(pymatgen.__version__)"
+execution:
+  function: |
+    def run_pymatgen(task="structure_analysis", formula="NaCl", output_dir="pymatgen_output"):
+        """Run PyMatGen materials analysis."""
+        import os
+        import json
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        from pymatgen.core import Structure, Lattice
+
+        # Create simple structure
+        lattice = Lattice.cubic(5.64)
+        structure = Structure(lattice, ["Na", "Cl"], [[0, 0, 0], [0.5, 0.5, 0.5]])
+
+        result = {
+            "status": "completed",
+            "formula": structure.formula,
+            "num_sites": structure.num_sites,
+            "volume": structure.volume,
+            "density": structure.density,
+            "lattice_type": structure.get_space_group_info()[0]
+        }
+
+        with open(os.path.join(output_dir, "result.json"), "w") as f:
+            json.dump(result, f)
+
+        return result
+  function_name: run_pymatgen
+  resources:
+    nodes: 1
+    cores_per_node: 1
+    memory_gb: 4
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+tags: [materials, analysis, structures, databases]

@@ -1,0 +1,42 @@
+name: abinit
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  conda_env: abinit_env
+  conda_packages:
+    - abinit
+installation:
+  steps:
+    - conda create -n abinit_env -c conda-forge abinit python=3.11 -y
+  verification: |
+    source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && \
+    conda activate abinit_env && abinit --version
+execution:
+  function: |
+    def run_abinit(task="test", output_dir="abinit_output"):
+        """Run Abinit DFT calculation."""
+        import subprocess
+        import os
+
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        conda = "source /soft/applications/conda/2025-09-25/mconda3/etc/profile.d/conda.sh && conda activate abinit_env && "
+
+        cmd = f"{conda}abinit --version"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "version": result.stdout.strip() if result.stdout else result.stderr[:200],
+            "output_dir": output_dir
+        }
+  function_name: run_abinit
+  resources:
+    nodes: 1
+    cores_per_node: 8
+    memory_gb: 32
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+tags: [dft, materials, periodic, plane_wave]

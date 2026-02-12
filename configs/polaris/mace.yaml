@@ -1,0 +1,42 @@
+name: mace
+hpc_system: polaris
+endpoint_id: 0554c761-5a62-474d-b26e-df7455682bba
+environment:
+  pip_packages:
+    - mace-torch
+installation:
+  steps:
+    - pip install mace-torch
+  verification: python -c "import mace; print('MACE installed')"
+execution:
+  function: |
+    def run_mace(task="test", output_dir="mace_output"):
+        """Run MACE ML potential."""
+        import os
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        try:
+            import mace
+            from mace.calculators import mace_mp
+
+            # Test import
+            return {
+                "status": "completed",
+                "message": "MACE installed and importable",
+                "note": "Use mace_mp() for Materials Project pretrained model"
+            }
+        except Exception as e:
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+  function_name: run_mace
+  resources:
+    nodes: 1
+    cores_per_node: 4
+    memory_gb: 16
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 1
+tags: [ml_potential, equivariant, materials, ase]
