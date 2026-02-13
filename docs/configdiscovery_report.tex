@@ -45,6 +45,9 @@
 
 \maketitle
 
+\tableofcontents
+\newpage
+
 \begin{abstract}
 We present ConfigDiscovery, a system that leverages large language models (LLMs) to automatically discover, configure, and validate scientific software installations on high-performance computing (HPC) systems. Using Globus Compute for remote execution, ConfigDiscovery has successfully configured 49 software packages across two DOE Leadership Computing Facility systems: 26 packages on Polaris (NVIDIA A100 GPUs) and 23 packages on Aurora (Intel GPUs). We introduce a Skills abstraction layer that allows users to express computational intent without specifying implementation details, with automatic selection of the best available implementation. We demonstrate the system's capabilities through a multi-fidelity molecular simulation pipeline that chains five different codes together, performing quantum chemistry calculations, machine learning potential training, molecular dynamics, and trajectory analysis.
 \end{abstract}
