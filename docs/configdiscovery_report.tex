@@ -1,0 +1,660 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\title{\textbf{ConfigDiscovery: LLM-Driven HPC Software Configuration Discovery via Globus Compute}}
+\author{Generated with Claude Code}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present ConfigDiscovery, a system that leverages large language models (LLMs) to automatically discover, configure, and validate scientific software installations on high-performance computing (HPC) systems. Using Globus Compute for remote execution, ConfigDiscovery has successfully configured 49 software packages across two DOE Leadership Computing Facility systems: 26 packages on Polaris (NVIDIA A100 GPUs) and 23 packages on Aurora (Intel GPUs). We introduce a Skills abstraction layer that allows users to express computational intent without specifying implementation details, with automatic selection of the best available implementation. We demonstrate the system's capabilities through a multi-fidelity molecular simulation pipeline that chains five different codes together, performing quantum chemistry calculations, machine learning potential training, molecular dynamics, and trajectory analysis.
+\end{abstract}
+
+\section{Introduction}
+
+Setting up scientific software on HPC systems is notoriously difficult. Each system has unique module environments, compilers, MPI implementations, GPU architectures, and file system layouts. Researchers often spend days or weeks debugging installation issues before they can begin their actual scientific work. This challenge is amplified when targeting multiple HPC systems with different architectures.
+
+ConfigDiscovery addresses this challenge by combining:
+\begin{itemize}
+    \item \textbf{Large Language Models} (Claude) for reasoning about software dependencies, reading documentation, and generating configuration scripts
+    \item \textbf{Globus Compute} for secure remote execution on HPC systems without direct SSH access
+    \item \textbf{Iterative refinement} where the LLM observes errors and automatically adjusts configurations
+    \item \textbf{Skills abstraction} allowing users to express intent rather than implementation details
+\end{itemize}
+
+The system produces validated YAML configuration files that specify everything needed to run a piece of software: environment modules, conda packages, environment variables, and executable Python functions that perform actual computations.
+
+\section{System Architecture}
+
+\subsection{Overview}
+
+ConfigDiscovery consists of four main components:
+
+\begin{enumerate}
+    \item \textbf{Discovery Engine}: An LLM-powered agent that researches software requirements, probes the HPC environment, and iteratively develops working configurations
+    \item \textbf{Compute Backend}: Globus Compute integration for executing commands and functions on remote HPC systems
+    \item \textbf{Configuration Schema}: A structured YAML format that captures all aspects of a software configuration
+    \item \textbf{Skills Layer}: An abstraction that maps computational intent to concrete implementations
+\end{enumerate}
+
+\subsection{Configuration Schema}
+
+Each discovered configuration is stored as a YAML file with the following structure:
+
+\begin{lstlisting}[caption={Configuration schema structure}]
+name: software_name
+hpc_system: polaris  # or aurora
+endpoint_id: <globus-compute-endpoint-uuid>
+
+environment:
+  modules: [module1, module2]
+  conda_env: environment_name
+  conda_packages: [pkg1, pkg2]
+  pip_packages: [pkg3, pkg4]
+  env_vars:
+    VAR_NAME: value
+  setup_commands:
+    - source activate script
+
+installation:
+  steps:
+    - installation command 1
+    - installation command 2
+  verification: |
+    command to verify installation works
+
+execution:
+  function: |
+    def run_software(...):
+        # Python function that runs the software
+        return {"status": "completed", ...}
+  function_name: run_software
+  resources:
+    nodes: 1
+    cores_per_node: 32
+    memory_gb: 64
+
+discovery_log:
+  discovered_date: '2026-02-12'
+  attempts: 15
+  notes: 'Discovery notes and observations'
+\end{lstlisting}
+
+\subsection{Globus Compute Integration}
+
+Globus Compute enables secure, authenticated remote execution on HPC systems. The \texttt{ComputeClient} class provides methods for:
+
+\begin{itemize}
+    \item \texttt{run\_command()}: Execute shell commands remotely
+    \item \texttt{run\_function()}: Execute Python functions remotely
+    \item \texttt{probe\_environment()}: Gather system information
+    \item \texttt{test\_config()}: Validate a complete configuration
+\end{itemize}
+
+All communication is authenticated via Globus Auth, eliminating the need for SSH keys or VPN access.
+
+\section{Supported HPC Systems}
+
+ConfigDiscovery supports two DOE Leadership Computing Facility systems at Argonne National Laboratory:
+
+\begin{table}[htbp]
+\centering
+\caption{Supported HPC Systems}
+\label{tab:systems}
+\begin{tabular}{llccc}
+\toprule
+\textbf{System} & \textbf{Architecture} & \textbf{Packages} & \textbf{Scheduler} & \textbf{Conda Location} \\
+\midrule
+Polaris & NVIDIA A100 GPUs & 26 & PBS & User miniconda \\
+Aurora & Intel PVC GPUs & 23 & PBS & /opt/aurora/25.190.0/... \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Aurora-Specific Configuration}
+
+Aurora is an Intel GPU-based exascale system with unique requirements:
+
+\begin{enumerate}
+    \item \textbf{Conda Environment}: Aurora uses Intel's conda distribution at \texttt{/opt/aurora/25.190.0/oneapi/intel-conda-miniforge/}
+    \item \textbf{PBS Scheduling}: Requires specific options including \texttt{filesystems=home:flare} and \texttt{system=sunspot}
+    \item \textbf{Worker Spin-up Time}: PBS jobs can take 5--10 minutes to start, requiring client-side timeouts of 600+ seconds
+\end{enumerate}
+
+\section{Configured Software}
+
+ConfigDiscovery has configured 49 scientific software packages across both systems. Table~\ref{tab:software} summarizes the results.
+
+\begin{table}[htbp]
+\centering
+\caption{Software configuration results}
+\label{tab:software}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Software} & \textbf{Domain} & \textbf{Polaris} & \textbf{Aurora} \\
+\midrule
+Psi4 & Quantum Chemistry & \checkmark & \checkmark \\
+PySCF & Quantum Chemistry & \checkmark & \checkmark \\
+NWChem & Quantum Chemistry & \checkmark & \checkmark \\
+ORCA & Quantum Chemistry & $\dag$ & -- \\
+CP2K & DFT (GPW method) & \checkmark & \checkmark \\
+GPAW & DFT (PAW method) & \checkmark & \checkmark \\
+Quantum ESPRESSO & Plane-wave DFT & \checkmark & \checkmark \\
+Siesta & DFT (numerical orbitals) & \checkmark & \checkmark \\
+Abinit & DFT (plane-wave) & \checkmark & \checkmark \\
+DFTB+ & Tight-binding DFT & \checkmark & \checkmark \\
+xtb & Semi-empirical QM & \checkmark & \checkmark \\
+OpenMM & Biomolecular MD & \checkmark & \checkmark \\
+GROMACS & Classical MD & \checkmark & \checkmark \\
+LAMMPS & Classical MD & \checkmark & \checkmark \\
+NAMD & Biomolecular MD & $\dag$ & -- \\
+AmberTools & Biomolecular Tools & \checkmark & \checkmark \\
+ASE & Atomistic Simulations & \checkmark & \checkmark \\
+MDAnalysis & Trajectory Analysis & \checkmark & \checkmark \\
+Phonopy & Phonon Calculations & \checkmark & \checkmark \\
+SchNetPack & ML Potentials & \checkmark & \checkmark \\
+DeePMD-kit & ML Potentials & \checkmark & \checkmark \\
+MACE & ML Potentials & \checkmark & --$^a$ \\
+RDKit & Cheminformatics & \checkmark & \checkmark \\
+Open Babel & Molecule Conversion & \checkmark & \checkmark \\
+PyMatGen & Materials Analysis & \checkmark & \checkmark \\
+OpenFOAM & CFD Simulations & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.5em}
+\footnotesize{\checkmark\ = Fully tested \quad $\dag$ = Requires manual download \quad -- = Not available} \\
+\footnotesize{$^a$MACE failed to install on Aurora due to disk quota limits}
+\end{table}
+
+\textbf{Summary}: Polaris has 26 packages (24 fully tested, 2 require manual setup). Aurora has 23 packages (all fully tested).
+
+\subsection{Configuration Details}
+
+\subsubsection{Quantum Chemistry Codes}
+
+\paragraph{xtb (GFN-xTB)} Semi-empirical quantum chemistry package installed via conda in a dedicated environment. Configured for geometry optimization, single-point energy calculations, and molecular dynamics. The execution function activates the conda environment via subprocess to ensure proper library loading.
+
+\paragraph{PySCF} Python-based quantum chemistry installed via pip. Supports Hartree-Fock, DFT, and post-HF methods (CCSD, MP2). Configured with \texttt{OMP\_NUM\_THREADS} for CPU parallelization.
+
+\paragraph{Psi4} Quantum chemistry suite available as a conda package. Configured for energy calculations with various methods and basis sets.
+
+\paragraph{NWChem} Computational chemistry package available via system modules on Polaris and conda on Aurora. Configured for DFT calculations on molecular systems.
+
+\subsubsection{Machine Learning for Chemistry}
+
+\paragraph{SchNetPack} Neural network potentials for atomistic systems. Installed via pip in a dedicated conda environment with PyTorch and PyTorch Lightning. The execution function generates training scripts that are executed with proper environment activation.
+
+\paragraph{DeePMD-kit} Deep learning potentials for molecular dynamics. Installed via pip with TensorFlow backend.
+
+\paragraph{MACE} Equivariant message-passing neural network potentials. Available on Polaris; installation on Aurora failed due to disk quota limits during pip installation.
+
+\subsubsection{Molecular Dynamics Codes}
+
+\paragraph{LAMMPS} Large-scale molecular dynamics available via system modules. Configured for various simulation types with proper MPI settings.
+
+\paragraph{OpenMM} GPU-accelerated biomolecular simulation installed via conda. Includes built-in test systems for validation.
+
+\paragraph{GROMACS} High-performance molecular dynamics. Installed via conda on both systems.
+
+\paragraph{NAMD} Biomolecular MD requiring manual download due to license restrictions. Available on Polaris only.
+
+\subsubsection{Materials Science}
+
+\paragraph{Phonopy} Phonon calculations for crystalline materials. Installed via pip with all dependencies including spglib for symmetry analysis.
+
+\paragraph{Quantum ESPRESSO} Plane-wave DFT code available via system modules. Configured for electronic structure calculations.
+
+\paragraph{GPAW} Real-space DFT code installed via pip. Required special environment variable \texttt{MPICH\_GPU\_SUPPORT\_ENABLED=0} to avoid MPI/GPU conflicts.
+
+\paragraph{Siesta, Abinit, DFTB+} Additional DFT codes installed via conda, providing a range of basis set options (numerical orbitals, plane-waves, tight-binding).
+
+\section{Skills Abstraction Layer}
+
+A major feature of ConfigDiscovery is the Skills system, which provides an abstraction over low-level configurations.
+
+\subsection{Motivation}
+
+Users want to express computational intent (``compute molecular energy'') without specifying implementation details (which code, which system, which parameters). Skills bridge this gap by mapping abstract capabilities to concrete implementations.
+
+\subsection{Architecture}
+
+\begin{verbatim}
+User Request: "compute energy of this molecule"
+        |
+        v
++------------------+
+|      Skill       |  molecular_energy
+|   (abstract)     |
++--------+---------+
+         | selects best implementation
+         v
++------------------+
+|     Config       |  configs/aurora/pyscf.yaml
+|   (concrete)     |
++--------+---------+
+         | executes on
+         v
++------------------+
+|   HPC System     |  Aurora via Globus Compute
++------------------+
+\end{verbatim}
+
+\subsection{Available Skills}
+
+Table~\ref{tab:skills} lists the available skills and their implementations.
+
+\begin{table}[htbp]
+\centering
+\caption{Available skills and implementations}
+\label{tab:skills}
+\begin{tabular}{lll}
+\toprule
+\textbf{Skill} & \textbf{Description} & \textbf{Implementations} \\
+\midrule
+molecular\_energy & Quantum mechanical energy & Psi4, PySCF, NWChem, xtb, GPAW \\
+geometry\_optimization & Optimize molecular geometry & xtb, ASE \\
+molecular\_dynamics & Classical/QM MD simulations & LAMMPS, GROMACS, OpenMM, xtb \\
+biomolecular\_md & Protein/biomolecule MD & OpenMM, GROMACS, NAMD \\
+trajectory\_analysis & Analyze MD trajectories & MDAnalysis \\
+train\_ml\_potential & Train ML potentials & SchNetPack, DeePMD-kit \\
+ml\_potential\_predict & Inference with ML potentials & SchNetPack, DeePMD-kit \\
+phonon\_calculation & Phonon properties & Phonopy \\
+periodic\_dft & Periodic DFT calculations & QE, CP2K, GPAW \\
+cfd\_simulation & Computational fluid dynamics & OpenFOAM \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Typed Inputs and Outputs}
+
+Skills define typed parameters with units and constraints:
+
+\begin{lstlisting}[language=Python,caption={Skill parameter specification}]
+inputs={
+    "molecule": ParameterSpec(
+        type=DataType.XYZ,
+        description="Molecular structure in XYZ format",
+        required=True
+    ),
+    "method": ParameterSpec(
+        type=DataType.STRING,
+        description="Quantum chemistry method",
+        default="HF",
+        options=["HF", "DFT", "B3LYP", "CCSD", "MP2", "GFN2-xTB"]
+    ),
+}
+outputs={
+    "energy": ParameterSpec(
+        type=DataType.FLOAT,
+        description="Total energy",
+        unit="hartree"
+    ),
+}
+\end{lstlisting}
+
+\subsection{Automatic System Selection}
+
+The \texttt{SkillExecutor} automatically selects the best available implementation:
+
+\begin{lstlisting}[language=Python,caption={Skill execution}]
+from configdiscovery.skills import run_skill
+
+# Automatically picks best available implementation
+result = run_skill("molecular_energy", molecule=xyz_string, method="HF")
+
+# Or specify a system
+result = run_skill("molecular_energy", molecule=xyz_string, system="aurora")
+\end{lstlisting}
+
+\section{Multi-Fidelity Molecular Simulation Pipeline}
+
+To demonstrate the power of having multiple codes configured and working together, we developed a multi-fidelity molecular simulation pipeline that chains five different computational methods.
+
+\subsection{Pipeline Architecture}
+
+The pipeline processes a single molecule through increasing levels of computational sophistication:
+
+\begin{enumerate}
+    \item \textbf{Conformer Generation (xtb)}: Generate molecular conformations by perturbing an optimized geometry and computing GFN2-xTB energies for each conformer
+    \item \textbf{Accurate Energy (PySCF)}: Compute Hartree-Fock energy on the lowest-energy conformer for comparison with semi-empirical results
+    \item \textbf{ML Potential Training (SchNetPack)}: Train a SchNet neural network on the conformer dataset to learn the potential energy surface
+    \item \textbf{Molecular Dynamics (xtb)}: Run MD simulation on the molecule using GFN2-xTB
+    \item \textbf{Trajectory Analysis}: Compute RMSD, radius of gyration, and atomic fluctuations from the MD trajectory
+\end{enumerate}
+
+\subsection{Data Flow}
+
+Critically, each step uses output from the previous step---this is not a collection of independent demonstrations but a genuine integrated workflow:
+
+\begin{itemize}
+    \item Step 1 produces conformers and energies $\rightarrow$ passed to Step 3 for training
+    \item Step 1 identifies the lowest-energy conformer $\rightarrow$ passed to Step 2 for accurate energy
+    \item Step 1's optimized structure $\rightarrow$ passed to Step 4 as MD starting point
+    \item Step 4's trajectory frames $\rightarrow$ passed to Step 5 for analysis
+\end{itemize}
+
+\subsection{Implementation}
+
+The pipeline is implemented as a Python script that orchestrates remote execution via Globus Compute. Each step is defined as a self-contained function that is serialized and executed on the HPC system:
+
+\begin{lstlisting}[language=Python,caption={Pipeline execution pattern}]
+def run_remote_function(func_code, func_name, endpoint_id, **kwargs):
+    compute = get_compute_client(endpoint_id)
+
+    def _run_dynamic(code, fname, fn_kwargs):
+        namespace = {}
+        exec(code, namespace)
+        func = namespace[fname]
+        return func(**fn_kwargs)
+
+    result = compute.run_function(
+        _run_dynamic, func_code, func_name, kwargs, timeout=1800
+    )
+    return result.return_value
+\end{lstlisting}
+
+Scripts are available for both systems:
+\begin{itemize}
+    \item \texttt{scripts/multi\_fidelity\_pipeline.py} (Polaris)
+    \item \texttt{scripts/multi\_fidelity\_pipeline\_aurora.py} (Aurora)
+\end{itemize}
+
+\subsection{Example: Ethanol Molecule}
+
+Running the pipeline on ethanol (C$_2$H$_5$OH) demonstrates the complete workflow:
+
+\begin{lstlisting}[language=bash,caption={Running the pipeline}]
+python scripts/multi_fidelity_pipeline.py \
+    --molecule ethanol \
+    --n-conformers 30 \
+    --n-epochs 10 \
+    --md-steps 500 \
+    --temperature 300
+\end{lstlisting}
+
+\subsubsection{Expected Results}
+
+\paragraph{Step 1: Conformer Generation}
+\begin{itemize}
+    \item 30 conformers generated via geometry perturbation
+    \item Energy range: approximately 50--150 kcal/mol spread
+    \item Computation time: $\sim$30--60 seconds
+\end{itemize}
+
+\paragraph{Step 2: Ab Initio Energy}
+\begin{itemize}
+    \item HF/6-31g energy: $\sim$-154.1 Hartree for ethanol
+    \item Comparison with xtb shows method-dependent energy offset
+\end{itemize}
+
+\paragraph{Step 3: ML Training}
+\begin{itemize}
+    \item SchNet model trained on 30 conformers (24 train, 6 validation)
+    \item Expected RMSE: 5--20 kcal/mol after 10 epochs
+    \item Saved model can be reused for fast energy predictions
+\end{itemize}
+
+\paragraph{Step 4: Molecular Dynamics}
+\begin{itemize}
+    \item 500 steps at 300 K (0.25 ps simulation time)
+    \item Trajectory captured as XYZ frames
+    \item Samples thermal fluctuations of the molecule
+\end{itemize}
+
+\paragraph{Step 5: Trajectory Analysis}
+\begin{itemize}
+    \item RMSD from initial structure: tracks structural deviation
+    \item Radius of gyration: molecular compactness
+    \item RMSF per atom: identifies flexible regions
+\end{itemize}
+
+\section{Key Technical Challenges and Solutions}
+
+\subsection{Globus Compute Timeouts}
+
+\textbf{Problem}: Initial tests on Aurora failed with ``Execution timed out'' errors even though the Globus Compute endpoint was running.
+
+\textbf{Root Cause}: Client-side timeouts were set to 60--120 seconds, but PBS worker jobs need 5--10 minutes to spin up when no workers are idle.
+
+\textbf{Solution}: Use 600-second (10 minute) timeouts for all remote executions:
+\begin{lstlisting}[language=Python]
+result = compute.run_function(func, timeout=600, **kwargs)
+\end{lstlisting}
+
+\textbf{Lesson}: Don't confuse infrastructure delays (PBS queue time) with execution failures. The Globus Compute endpoint can be ``running'' while PBS workers are still being scheduled.
+
+\subsection{Conda Environment Activation}
+
+A major challenge was ensuring that software installed in conda environments could be properly accessed by Globus Compute workers. The workers run in their own environment and don't inherit shell configurations.
+
+\textbf{Solution}: Execution functions write Python scripts to disk and execute them via subprocess with explicit conda activation:
+
+\begin{lstlisting}[language=Python]
+conda_activate = "source /path/to/conda.sh && conda activate env && "
+cmd = f"{conda_activate}python {script_file}"
+subprocess.run(cmd, shell=True, ...)
+\end{lstlisting}
+
+\subsection{MPI and GPU Conflicts}
+
+Several codes (GPAW, GROMACS) experienced issues with MPI libraries attempting to initialize GPU support on CPU-only nodes.
+
+\textbf{Solution}: Set environment variable \texttt{MPICH\_GPU\_SUPPORT\_ENABLED=0} before execution.
+
+\subsection{Quote Escaping in Remote Execution}
+
+\textbf{Problem}: Nested quotes in shell commands caused syntax errors when serialized through Globus Compute.
+
+\textbf{Solution}: Avoid complex quoting by:
+\begin{itemize}
+    \item Writing scripts to temporary files
+    \item Using environment variables instead of inline strings
+    \item Structuring tests with separate command components
+\end{itemize}
+
+\subsection{API Version Compatibility}
+
+Libraries like Phonopy underwent API changes between versions, causing execution functions to fail with \texttt{AttributeError}.
+
+\textbf{Solution}: The LLM discovered and adapted to API changes by consulting documentation and testing different method names (e.g., \texttt{set\_mesh()} $\rightarrow$ \texttt{run\_mesh()}).
+
+\subsection{Path and Directory Management}
+
+Remote execution occurs in arbitrary working directories. Relative paths caused file-not-found errors.
+
+\textbf{Solution}: Use \texttt{os.path.abspath()} for all paths and create output directories explicitly with \texttt{os.makedirs(..., exist\_ok=True)}.
+
+\subsection{License-Restricted Software}
+
+\textbf{Problem}: Some packages (ORCA, NAMD) cannot be auto-installed due to license restrictions.
+
+\textbf{Solution}:
+\begin{itemize}
+    \item Mark these configs with \texttt{manual\_download: required: true}
+    \item Provide clear installation instructions in config files
+    \item Use warning indicators in documentation
+\end{itemize}
+
+\subsection{Disk Quota Limits}
+
+\textbf{Problem}: MACE failed to install on Aurora due to disk quota exceeded during pip installation.
+
+\textbf{Lesson}: Large ML packages with many dependencies can exceed user quotas. Monitor disk usage during installation and consider using shared installations for large packages.
+
+\section{CLI Commands}
+
+ConfigDiscovery provides a comprehensive CLI for managing configurations and skills:
+
+\subsection{Configuration Commands}
+
+\begin{lstlisting}[language=bash,caption={Configuration CLI commands}]
+# List available configurations
+configdiscovery list
+
+# Show configuration details
+configdiscovery show configs/polaris/pyscf.yaml
+
+# Test a configuration (verify + run calculation)
+configdiscovery test configs/polaris/pyscf.yaml
+
+# Install dependencies on remote system
+configdiscovery install configs/polaris/schnetpack.yaml
+
+# Discover new software configuration
+configdiscovery discover "software_name" --endpoint <id> --system polaris
+
+# Run with custom parameters
+configdiscovery run configs/polaris/pyscf.yaml \
+    --param method=CCSD --param basis=cc-pvdz
+\end{lstlisting}
+
+\subsection{Skill Commands}
+
+\begin{lstlisting}[language=bash,caption={Skill CLI commands}]
+# List available skills
+configdiscovery skill list
+
+# Show skill details and implementations
+configdiscovery skill show molecular_energy
+
+# Run a skill (auto-selects implementation)
+configdiscovery skill run molecular_energy \
+    --molecule water.xyz --method HF --basis 6-31g
+
+# Run on a specific system
+configdiscovery skill run molecular_energy \
+    --molecule water.xyz --system aurora
+
+# Search skills by capability
+configdiscovery skill search "energy"
+\end{lstlisting}
+
+\section{Conclusions}
+
+ConfigDiscovery demonstrates that LLMs can effectively automate the challenging task of configuring scientific software on HPC systems. Key achievements include:
+
+\begin{itemize}
+    \item \textbf{49 validated configurations} across two HPC systems (26 on Polaris, 23 on Aurora)
+    \item \textbf{Multi-architecture support} spanning NVIDIA and Intel GPU systems
+    \item \textbf{Skills abstraction layer} enabling intent-based execution with automatic implementation selection
+    \item \textbf{Fully automated discovery} requiring no manual SSH access
+    \item \textbf{Reproducible configurations} stored as version-controllable YAML files
+    \item \textbf{Integrated workflows} demonstrated through the multi-fidelity pipeline
+\end{itemize}
+
+The few packages requiring manual setup (ORCA, NAMD) have external license restrictions---not limitations of the approach itself.
+
+\subsection{Future Work}
+
+\begin{itemize}
+    \item \textbf{Additional Systems}: Extend to Frontier (ORNL), Perlmutter (NERSC)
+    \item \textbf{Container Generation}: Auto-generate Singularity/Apptainer containers from configurations
+    \item \textbf{Workflow Integration}: Direct integration with Parsl, Prefect, Globus Flows
+    \item \textbf{Skill Chaining}: Declarative multi-step workflow definitions
+    \item \textbf{Cost Estimation}: Predict compute hours before execution
+\end{itemize}
+
+\section*{Acknowledgments}
+
+This work used resources of the Argonne Leadership Computing Facility, a U.S. Department of Energy Office of Science user facility at Argonne National Laboratory. ConfigDiscovery was developed using Claude, Anthropic's AI assistant.
+
+\appendix
+
+\section{Available Molecules in Pipeline}
+
+The multi-fidelity pipeline includes the following pre-defined molecules:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Molecule} & \textbf{Formula} & \textbf{Atoms} \\
+\midrule
+Water & H$_2$O & 3 \\
+Methane & CH$_4$ & 5 \\
+Formic acid & HCOOH & 5 \\
+Ethanol & C$_2$H$_5$OH & 9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Custom molecules can be added by providing XYZ-format coordinate strings.
+
+\section{Configuration Counts by Domain}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Domain} & \textbf{Polaris} & \textbf{Aurora} \\
+\midrule
+Quantum Chemistry & 5 & 4 \\
+DFT Codes & 6 & 6 \\
+Molecular Dynamics & 4 & 3 \\
+ML Potentials & 3 & 2 \\
+Analysis Tools & 4 & 4 \\
+Materials Science & 2 & 2 \\
+Engineering (CFD) & 1 & 1 \\
+\midrule
+\textbf{Total} & \textbf{26} & \textbf{23} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Installation Methods}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Method} & \textbf{Package Count} \\
+\midrule
+Conda (conda-forge) & 18 \\
+Pip & 14 \\
+System Modules & 6 \\
+Manual Download & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
