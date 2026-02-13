@@ -29,34 +29,34 @@ Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - 
 
 | Software | Domain | Polaris | Aurora |
 |----------|--------|:-------:|:------:|
-| Psi4 | Quantum Chemistry | [✅](configs/polaris/psi4.yaml) | [✓](configs/aurora/psi4.yaml) |
+| Psi4 | Quantum Chemistry | [✅](configs/polaris/psi4.yaml) | [✅](configs/aurora/psi4.yaml) |
 | PySCF | Quantum Chemistry | [✅](configs/polaris/pyscf.yaml) | [✅](configs/aurora/pyscf.yaml) |
-| NWChem | Quantum Chemistry | [✅](configs/polaris/nwchem.yaml) | [✓](configs/aurora/nwchem.yaml) |
+| NWChem | Quantum Chemistry | [✅](configs/polaris/nwchem.yaml) | [✅](configs/aurora/nwchem.yaml) |
 | ORCA | Quantum Chemistry | [✅](configs/polaris/orca.yaml) | - |
 | CP2K | DFT (GPW method) | [✅](configs/polaris/cp2k.yaml) | [✅](configs/aurora/cp2k.yaml) |
-| GPAW | DFT (PAW method) | [✅](configs/polaris/gpaw.yaml) | [✓](configs/aurora/gpaw.yaml) |
+| GPAW | DFT (PAW method) | [✅](configs/polaris/gpaw.yaml) | [✅](configs/aurora/gpaw.yaml) |
 | Quantum ESPRESSO | Plane-wave DFT | [✅](configs/polaris/quantum-espresso.yaml) | [✅](configs/aurora/quantum-espresso.yaml) |
-| Siesta | DFT (numerical orbitals) | [✅](configs/polaris/siesta.yaml) | [✓](configs/aurora/siesta.yaml) |
-| Abinit | DFT (plane-wave) | [✅](configs/polaris/abinit.yaml) | [✓](configs/aurora/abinit.yaml) |
-| DFTB+ | Tight-binding DFT | [✅](configs/polaris/dftbplus.yaml) | [✓](configs/aurora/dftbplus.yaml) |
+| Siesta | DFT (numerical orbitals) | [✅](configs/polaris/siesta.yaml) | [✅](configs/aurora/siesta.yaml) |
+| Abinit | DFT (plane-wave) | [✅](configs/polaris/abinit.yaml) | [✅](configs/aurora/abinit.yaml) |
+| DFTB+ | Tight-binding DFT | [✅](configs/polaris/dftbplus.yaml) | [✅](configs/aurora/dftbplus.yaml) |
 | xtb | Semi-empirical QM | [✅](configs/polaris/xtb.yaml) | [✅](configs/aurora/xtb.yaml) |
 | OpenMM | Biomolecular MD | [✅](configs/polaris/openmm.yaml) | [✅](configs/aurora/openmm.yaml) |
 | GROMACS | Classical MD | [✅](configs/polaris/gromacs.yaml) | [✅](configs/aurora/gromacs.yaml) |
-| LAMMPS | Classical MD | [✅](configs/polaris/lammps.yaml) | [✓](configs/aurora/lammps.yaml) |
+| LAMMPS | Classical MD | [✅](configs/polaris/lammps.yaml) | [✅](configs/aurora/lammps.yaml) |
 | NAMD | Biomolecular MD | [✅](configs/polaris/namd.yaml) | - |
-| AmberTools | Biomolecular Tools | [✅](configs/polaris/ambertools.yaml) | [✓](configs/aurora/ambertools.yaml) |
+| AmberTools | Biomolecular Tools | [✅](configs/polaris/ambertools.yaml) | [✅](configs/aurora/ambertools.yaml) |
 | ASE | Atomistic Simulations | [✅](configs/polaris/ase.yaml) | [✅](configs/aurora/ase.yaml) |
 | MDAnalysis | Trajectory Analysis | [✅](configs/polaris/mdanalysis.yaml) | [✅](configs/aurora/mdanalysis.yaml) |
 | Phonopy | Phonon Calculations | [✅](configs/polaris/phonopy.yaml) | [✅](configs/aurora/phonopy.yaml) |
 | SchNetPack | ML Potentials | [✅](configs/polaris/schnetpack.yaml) | [✅](configs/aurora/schnetpack.yaml) |
-| DeePMD-kit | ML Potentials | [✅](configs/polaris/deepmd-kit.yaml) | [✓](configs/aurora/deepmd-kit.yaml) |
+| DeePMD-kit | ML Potentials | [✅](configs/polaris/deepmd-kit.yaml) | [✅](configs/aurora/deepmd-kit.yaml) |
 | MACE | ML Potentials | [✅](configs/polaris/mace.yaml) | - |
-| RDKit | Cheminformatics | [✅](configs/polaris/rdkit.yaml) | [✓](configs/aurora/rdkit.yaml) |
-| Open Babel | Molecule Conversion | [✅](configs/polaris/openbabel.yaml) | [✓](configs/aurora/openbabel.yaml) |
-| PyMatGen | Materials Analysis | [✅](configs/polaris/pymatgen.yaml) | [✓](configs/aurora/pymatgen.yaml) |
+| RDKit | Cheminformatics | [✅](configs/polaris/rdkit.yaml) | [✅](configs/aurora/rdkit.yaml) |
+| Open Babel | Molecule Conversion | [✅](configs/polaris/openbabel.yaml) | [✅](configs/aurora/openbabel.yaml) |
+| PyMatGen | Materials Analysis | [✅](configs/polaris/pymatgen.yaml) | [✅](configs/aurora/pymatgen.yaml) |
 | OpenFOAM | CFD Simulations | [✅](configs/polaris/openfoam.yaml) | [✅](configs/aurora/openfoam.yaml) |
 
-**Polaris**: 26 packages (all tested) | **Aurora**: 23 packages (11 tested, 12 installed)
+**Polaris**: 26 packages (all tested) | **Aurora**: 23 packages (all tested)
 
 Notes:
 - ORCA and NAMD require manual download and cannot be installed via conda
