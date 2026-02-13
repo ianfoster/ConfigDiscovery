@@ -32,7 +32,7 @@ Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - 
 | Psi4 | Quantum Chemistry | [✅](configs/polaris/psi4.yaml) | [✅](configs/aurora/psi4.yaml) |
 | PySCF | Quantum Chemistry | [✅](configs/polaris/pyscf.yaml) | [✅](configs/aurora/pyscf.yaml) |
 | NWChem | Quantum Chemistry | [✅](configs/polaris/nwchem.yaml) | [✅](configs/aurora/nwchem.yaml) |
-| ORCA | Quantum Chemistry | [✅](configs/polaris/orca.yaml) | - |
+| ORCA | Quantum Chemistry | [⚠️](configs/polaris/orca.yaml) | - |
 | CP2K | DFT (GPW method) | [✅](configs/polaris/cp2k.yaml) | [✅](configs/aurora/cp2k.yaml) |
 | GPAW | DFT (PAW method) | [✅](configs/polaris/gpaw.yaml) | [✅](configs/aurora/gpaw.yaml) |
 | Quantum ESPRESSO | Plane-wave DFT | [✅](configs/polaris/quantum-espresso.yaml) | [✅](configs/aurora/quantum-espresso.yaml) |
@@ -43,7 +43,7 @@ Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - 
 | OpenMM | Biomolecular MD | [✅](configs/polaris/openmm.yaml) | [✅](configs/aurora/openmm.yaml) |
 | GROMACS | Classical MD | [✅](configs/polaris/gromacs.yaml) | [✅](configs/aurora/gromacs.yaml) |
 | LAMMPS | Classical MD | [✅](configs/polaris/lammps.yaml) | [✅](configs/aurora/lammps.yaml) |
-| NAMD | Biomolecular MD | [✅](configs/polaris/namd.yaml) | - |
+| NAMD | Biomolecular MD | [⚠️](configs/polaris/namd.yaml) | - |
 | AmberTools | Biomolecular Tools | [✅](configs/polaris/ambertools.yaml) | [✅](configs/aurora/ambertools.yaml) |
 | ASE | Atomistic Simulations | [✅](configs/polaris/ase.yaml) | [✅](configs/aurora/ase.yaml) |
 | MDAnalysis | Trajectory Analysis | [✅](configs/polaris/mdanalysis.yaml) | [✅](configs/aurora/mdanalysis.yaml) |
@@ -56,11 +56,13 @@ Legend: ✅ = Tested (full calculation) | ✓ = Installed (import verified) | - 
 | PyMatGen | Materials Analysis | [✅](configs/polaris/pymatgen.yaml) | [✅](configs/aurora/pymatgen.yaml) |
 | OpenFOAM | CFD Simulations | [✅](configs/polaris/openfoam.yaml) | [✅](configs/aurora/openfoam.yaml) |
 
-**Polaris**: 26 packages (all tested) | **Aurora**: 23 packages (all tested)
+**Polaris**: 26 packages (24 tested, 2 require manual setup) | **Aurora**: 23 packages (all tested)
+
+Legend: ✅ = Fully tested | ⚠️ = Requires manual setup | - = Not available
 
 Notes:
-- ORCA and NAMD require manual download and cannot be installed via conda
-- MACE failed to install on Aurora due to disk quota limits
+- **ORCA** and **NAMD** require manual download (academic license) and cannot be auto-installed
+- **MACE** failed to install on Aurora due to disk quota limits
 
 ## Quick Start
 
